@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 
 from annotation_widgets.image.logic import AbstractImageAnnotationLogic
-from exceptions import MessageBoxException
+from exceptions import WarningMessageBoxException
 from models import ProjectData
 from .models import ClassificationImage
 from .path_manager import FilteringPathManager
@@ -80,8 +80,9 @@ class ImageFilteringLogic(AbstractImageAnnotationLogic):
 
         # Check if the video file was successfully opened
         if not self.cap.isOpened():
-            raise MessageBoxException(f"Error opening video file {data_path}")
+            raise WarningMessageBoxException(f"Error opening video file {data_path}")
 
+        assert False
         self.number_of_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         super().__init__(data_path=data_path, project_data=project_data)

@@ -1,5 +1,5 @@
 import os
-from exceptions import MessageBoxException
+from exceptions import WarningMessageBoxException
 from main import MainWindow
 from gui_utils import SettingsManager
 from config import settings
@@ -16,7 +16,7 @@ class Application:
                 data_dir = settings.data_dir
                 settings.data["data_dir"] = None
                 settings.save_settings()
-                raise MessageBoxException(f"Unable to create data_dir in '{data_dir}'")
+                raise WarningMessageBoxException(f"Unable to create data_dir in '{data_dir}'")
         self.main_window = MainWindow()
 
     def initialize_gui(self):

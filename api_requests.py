@@ -5,7 +5,7 @@ from urllib.error import HTTPError
 import requests
 from config import settings
 from enums import AnnotationMode, AnnotationStage
-from exceptions import MessageBoxException
+from exceptions import MessageBoxException, WarningMessageBoxException
 from models import ProjectData
 from path_manager import get_local_projects_data
 
@@ -29,7 +29,7 @@ def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
                 result.append(ProjectData.from_json(project))
             return result
     
-    raise MessageBoxException(f"Unable to get projects data. {response.status_code}")
+    raise WarningMessageBoxException(f"Unable to get projects data. {response.status_code}")
 
 
 def get_project_data(project_uid: str) -> Tuple[AnnotationStage, AnnotationMode]:
@@ -61,4 +61,4 @@ def complete_task(project_uid: int, duration_hours: float):
             message = response.json()
         except:
             message = f"Internal Server Error with project uid {project_uid}"
-        raise MessageBoxException(message)
+        raise WarningMessageBoxException(message)

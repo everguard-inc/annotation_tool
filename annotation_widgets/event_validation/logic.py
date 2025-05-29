@@ -11,7 +11,7 @@ from annotation_widgets.event_validation.models import Event
 from annotation_widgets.event_validation.path_manager import EventValidationPathManager
 from annotation_widgets.image.logic import AbstractImageAnnotationLogic
 from enums import EventViewMode
-from exceptions import MessageBoxException
+from exceptions import WarningMessageBoxException
 from models import ProjectData, Value
 
 
@@ -156,7 +156,7 @@ class EventValidationLogic(AbstractImageAnnotationLogic):
         self.cap = cv2.VideoCapture(video_path)
 
         if not self.cap.isOpened():
-            raise MessageBoxException(f"Error opening video file {video_path}")
+            raise WarningMessageBoxException(f"Error opening video file {video_path}")
 
         counter = 0
         while True:

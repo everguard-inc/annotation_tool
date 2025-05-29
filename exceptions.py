@@ -1,14 +1,16 @@
 import tkinter as tk
 import sys
 import traceback
+from abc import abstractmethod
 from tkinter import scrolledtext 
 
 
-class MessageBoxException(Exception):
+class CommonMessageBoxException(Exception):
     def __init__(self, message):
         super().__init__(message)
         self.root = tk.Tk()
         self.root.title("Error")
+        self._window_closed = False
 
         # Create a Text widget with a vertical scrollbar
         self.text_area = scrolledtext.ScrolledText(self.root, wrap=tk.WORD)
@@ -35,8 +37,22 @@ class MessageBoxException(Exception):
         self.text_area.config(state=tk.DISABLED)
 
     def close_window(self):
-        self.root.destroy()
-        sys.exit(1)  # Exit the program
+        if self._window_closed:
+            return
+        self._window_closed = True
+        if self.root.winfo_exists():
+            self.root.destroy()
+
+
+class MessageBoxException(CommonMessageBoxException):
+
+    def close_window(self):
+        super().close_window()
+        sys.exit(1)
+
+
+class WarningMessageBoxException(CommonMessageBoxException):
+    pass
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
@@ -49,8 +65,12 @@ def handle_exception(exc_type, exc_value, exc_traceback):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
+    if isinstance(exc_value, CommonMessageBoxException):
+        exc_value.close_window()
+        return
+
     err_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
-    raise MessageBoxException(err_msg)
+    MessageBoxException(err_msg)
 
 # Set sys.excepthook to our custom function to catch all unhandled exceptions
 sys.excepthook = handle_exception

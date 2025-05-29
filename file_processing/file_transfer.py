@@ -4,7 +4,7 @@ import traceback
 from typing import Callable
 from config import settings
 import requests
-from exceptions import MessageBoxException
+from exceptions import WarningMessageBoxException
 from file_processing.progress_bar import ProcessingProgressBar
 
 
@@ -36,7 +36,7 @@ class FileTransferClient(ProcessingProgressBar):
             try:
                 future.result()  # This will raise any exceptions caught by the thread
             except Exception as e:
-                raise MessageBoxException(f"Unable to download file {uid}/{file_name}. Error: {traceback.format_exc()}")
+                raise WarningMessageBoxException(f"Unable to download file {uid}/{file_name}. Error: {traceback.format_exc()}")
             time.sleep(0.5)
             self.root.destroy()
         else:
@@ -49,7 +49,7 @@ def download_file(uid, file_name, save_path, update_callback: Callable = None, s
             if ignore_404 and r.status_code == 404:
                 return
             else:
-                raise MessageBoxException(f"Unable to download file {uid}:{file_name}. Error: {r.json()}")
+                raise WarningMessageBoxException(f"Unable to download file {uid}:{file_name}. Error: {r.json()}")
         total_size_in_bytes = int(r.headers.get('content-length', 0))
         downloaded_size = 0
         start_time = time.time()
@@ -89,7 +89,7 @@ def upload_file(uid, file_path):
             error_message = f"Status code: {response.status_code}, {response.json()}"
         except ValueError:
             error_message = f"Status code: {response.status_code}"
-        raise MessageBoxException(f"Error: Server responded with {error_message} while uploading {file_path}")
+        raise WarningMessageBoxException(f"Error: Server responded with {error_message} while uploading {file_path}")
 
 
 if __name__ == "__main__":
