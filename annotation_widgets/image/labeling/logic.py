@@ -11,7 +11,7 @@ import numpy as np
 
 from annotation_widgets.image.logic import AbstractImageAnnotationLogic
 from enums import AnnotationMode, AnnotationStage, FigureType
-from exceptions import MessageBoxException
+from exceptions import WarningMessageBoxException
 from models import ProjectData
 from .drawing import create_class_selection_wheel, get_selected_sector_id
 from .figure_controller import Mode, ObjectFigureController
@@ -54,7 +54,7 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
         for img_name in self.img_names: # Check that images from the directory are in the the database
             img_object = LabeledImage.get(name=img_name)
             if img_object is None:
-                raise MessageBoxException(f"{img_name} is not found in the database") 
+                raise WarningMessageBoxException(f"{img_name} is not found in the database")
             
         self.figures: List[Figure] = list()
         self.review_labels: List[ReviewLabel] = list()

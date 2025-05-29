@@ -1,6 +1,6 @@
 import os
 from typing import Any, Dict
-from exceptions import MessageBoxException
+from exceptions import WarningMessageBoxException
 from utils import open_json, save_json
 
 
@@ -75,7 +75,7 @@ class Settings:
             result = result["value"]
         
         if result is None:
-            raise MessageBoxException(f"Specify value of `{name}` in Project > Settings. Your current settings: {self.data}")
+            raise WarningMessageBoxException(f"Specify value of `{name}` in Project > Settings. Your current settings: {self.data}")
         return result
 
     @property
@@ -118,9 +118,3 @@ class ColorBGR:
     gray = (192, 192, 192)
     brown = (19, 69, 139)
     color1 = (1, 1, 1)
-
-
-
-
-
-

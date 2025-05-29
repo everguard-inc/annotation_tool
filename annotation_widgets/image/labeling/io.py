@@ -6,7 +6,7 @@ from annotation_widgets.image.io import ImageIO
 from annotation_widgets.image.models import Label
 from api_requests import get_project_data
 from enums import AnnotationStage, FigureType
-from exceptions import MessageBoxException
+from exceptions import WarningMessageBoxException
 from file_processing.file_transfer import FileTransferClient, download_file, upload_file
 from file_processing.unzipping import ArchiveUnzipper
 from gui_utils import get_loading_window
@@ -76,7 +76,7 @@ class ImageLabelingIO(ImageIO):
 
         img_number = len(os.listdir(self.pm.images_path))
         if img_number != img_ann_number:
-            raise MessageBoxException(f"The project {self.project_data.id} has a different number of images and annotations. Remove and download it again, and if that doesn't help, ask administrator to fix the project")
+            raise WarningMessageBoxException(f"The project {self.project_data.id} has a different number of images and annotations. Remove and download it again, and if that doesn't help, ask administrator to fix the project")
 
     def overwrite_project(self): 
         """
@@ -270,7 +270,7 @@ class ImageLabelingIO(ImageIO):
         img_number = len(os.listdir(self.pm.images_path))
 
         if img_number != img_ann_number:
-            raise MessageBoxException(f"The project {project_id} has a different number of images and annotations. Re-launch application to download again or, if that doesn't help, ask to fix the project")
+            raise WarningMessageBoxException(f"The project {project_id} has a different number of images and annotations. Re-launch application to download again or, if that doesn't help, ask to fix the project")
 
         self.overwrite_project()
 
