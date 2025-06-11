@@ -2,7 +2,9 @@ import json
 import os
 import tkinter as tk
 
-from enums import AnnotationStage
+from annotation_widgets.image.models import Label
+from enums import AnnotationStage, FigureType
+
 from exceptions import MessageBoxException
 from file_processing.file_transfer import FileTransferClient, download_file, upload_file
 from file_processing.unzipping import ArchiveUnzipper
@@ -107,12 +109,25 @@ class ImageLabelingIO(ImageIO):
         """
         # Set current image id to 0
         Value.update_value("item_id", 0, overwrite=True)
-        figures_data = open_json(self.pm.figures_ann_path )
+        figures_data = open_json(self.pm.figures_ann_path)
         meta_data = open_json(self.pm.meta_ann_path)
 
         # Labels
         self.overwrite_labels(labels_data=meta_data["labels"] + meta_data["review_labels"])
     
+        # Add blur label
+        masks_labels_number = len([label for label in Label.all() if label.type == FigureType.MASK.name])
+        blur_label_type = "MASK" if masks_labels_number > 0 else "BBOX"
+        label = Label.get(name="blur", figure_type=blur_label_type)
+        if label is None:
+            label = Label(
+                name="blur",
+                color="gray",
+                hotkey=0,
+                type=blur_label_type,
+            )
+            label.save()
+
         # Figures
         limages = list()
         for img_name in os.listdir(self.pm.images_path): 
@@ -232,6 +247,8 @@ class ImageLabelingIO(ImageIO):
         """Force download and overwrite annotations in the database"""
 
         project_id, project_uid = self.project_data.id, self.project_data.uid
+
+        annotation_stage, annotation_mode = get_project_data(project_uid)
         
         download_file(
             uid=project_uid, 
