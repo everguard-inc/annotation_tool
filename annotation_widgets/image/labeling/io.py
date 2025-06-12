@@ -247,8 +247,6 @@ class ImageLabelingIO(ImageIO):
         """Force download and overwrite annotations in the database"""
 
         project_id, project_uid = self.project_data.id, self.project_data.uid
-
-        annotation_stage, annotation_mode = get_project_data(project_uid)
         
         download_file(
             uid=project_uid, 
