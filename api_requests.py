@@ -7,10 +7,8 @@ from exceptions import MessageBoxException
 from models import ProjectData
 
 
-headers = {'Authorization': f'Token {settings.token}'}
-
-
-def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]: 
+def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
+    headers = {'Authorization': f'Token {settings.token}'}
     url = f'{settings.api_url}/api/v2/annotation/tasks/'
 
     response = requests.get(url=url, headers=headers)
@@ -29,6 +27,7 @@ def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
 
 
 def complete_task(project_uid: int, duration_hours: float):
+    headers = {'Authorization': f'Token {settings.token}'}
     url = f'{settings.api_url}/api/v2/annotation/tasks/{project_uid}/complete/' # Change stage of annotation project
 
     data = {'duration_hours': duration_hours}
