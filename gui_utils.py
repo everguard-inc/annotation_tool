@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 from tkinter import scrolledtext
-from typing import Callable, List
+from typing import Callable, List, Optional
 from config import settings
 from models import ProjectData
 from tkinter import ttk
@@ -254,7 +254,9 @@ class ProjectSelector:
 
 
 class MessageBox:
-    def __init__(self, message):
+    def __init__(self, message, at_ok: Optional[Callable] = None):
+        self.at_ok: Callable = at_ok
+
         self.root = tk.Tk()
         self.root.title("Update result")
 
@@ -283,6 +285,10 @@ class MessageBox:
         self.text_area.config(state=tk.DISABLED)
 
     def close_window(self):
+        self.root.destroy()
+        if self.at_ok:
+            self.at_ok()
+
         self.root.destroy()
 
 def show_html_window(root: tk.Tk, title, html_content):

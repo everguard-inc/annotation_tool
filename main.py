@@ -192,18 +192,25 @@ class MainWindow(tk.Tk):
         self.destroy()
 
     def update_tool(self):
-        """Pulls git repository"""
-        agree = messagebox.askokcancel("Tool update", "Are you sure you want to update annotation tool?")
+        """Pulls git repository and installs requirements"""
+        agree = messagebox.askokcancel("Tool update", "Are you sure you want to update the annotation tool?")
         if agree:
             root_path = os.path.dirname(os.path.abspath(__file__))
 
-            result = subprocess.run(["git", "-C", root_path, "pull"], capture_output=True, text=True)
+            git_result = subprocess.run(["git", "-C", root_path, "pull"], capture_output=True, text=True)
 
-            message = f"{result.stdout}\n{result.stderr}"
-            if "Updating" in message:
-                message= message + "\n\nSuccess\n\nRe-open the tool for the changes to take effect"
+            req_path = os.path.join(root_path, "requirements.txt")
+            pip_result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", req_path], capture_output=True, text=True)
 
-            MessageBox(message)
+            message = f"{git_result.stdout}\n{git_result.stderr}\n\n" \
+                    f"{pip_result.stdout}\n{pip_result.stderr}"
+
+            if "Updating" in git_result.stdout:
+                message += "\n\nSuccess\n\nClick OK and the tool will be closed. Open it again for the changes to take effect."
+                MessageBox(message, at_ok=lambda: sys.exit(1))
+            else:
+                MessageBox(message)
+                
 
     def show_hotkeys(self):
         template_path = os.path.join(templates_path, "hotkeys.html")
