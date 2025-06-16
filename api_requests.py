@@ -7,21 +7,22 @@ from exceptions import MessageBoxException
 from models import ProjectData
 
 
-headers = {'Authorization': f'Token {settings.token}'}
+def get_headers():
+    return {'Authorization': f'Token {settings.token}'}
 
 
 def load_public_key():
     url = f"{settings.api_url}/api/v2/annotation/public_key/"
-    response = requests.get(url=url, headers=headers)
+    response = requests.get(url=url, headers=get_headers())
     if response.status_code == 200:
         return response.json()["public_key"]
     raise MessageBoxException(f"Internal Server Error with connection to portal.")
 
 
-def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]: 
+def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
     url = f'{settings.api_url}/api/v2/annotation/tasks/'
 
-    response = requests.get(url=url, headers=headers)
+    response = requests.get(url=url, headers=get_headers())
 
     if response.status_code == 200:
         projects = response.json()["projects"]
@@ -37,10 +38,10 @@ def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
 
 
 def complete_task(project_uid: int, duration_hours: float):
-    url = f'{settings.api_url}/api/v2/annotation/tasks/{project_uid}/complete/' # Change stage of annotation project
+    url = f'{settings.api_url}/api/annotation/tasks/{project_uid}/complete/' # Change stage of annotation project
 
     data = {'duration_hours': duration_hours}
-    response = requests.post(url=url, headers=headers, json=data)
+    response = requests.post(url=url, headers=get_headers(), json=data)
 
     if response.status_code != 200:
         try: 
