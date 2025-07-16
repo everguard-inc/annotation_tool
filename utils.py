@@ -1,10 +1,15 @@
+import functools
 from datetime import datetime
 import json
 import os
-from typing import Tuple
+from typing import Tuple, Callable, Union
 
 from PIL import Image
 import requests
+
+from exceptions import WarningMessageBoxException
+from logging_config import logger
+
 
 def open_json(detections_file):
     with open(detections_file, "r") as file:
@@ -88,3 +93,24 @@ def get_img_size(img_path: str) -> Tuple[int, int]:
     im = Image.open(img_path)
     frame_width, frame_height = im.size
     return int(frame_width), int(frame_height)
+
+
+def safe_execution(on_error: Union[Callable, str] = None, message: str = None):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            try:
+                return func(self, *args, **kwargs)
+            except Exception as e:
+                logger.error(
+                    f"Error in {func.__qualname__} with args={args} and kwargs={kwargs}: {e}",
+                    exc_info=True,
+                )
+                if callable(on_error):
+                    on_error(self)
+
+                elif isinstance(on_error, str) and hasattr(self, on_error):
+                    getattr(self, on_error)()
+                raise WarningMessageBoxException(e)
+        return wrapper
+    return decorator
