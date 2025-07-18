@@ -368,6 +368,3 @@ class BaseCanvasView(tk.Canvas):
 
         cropped = cv2.resize(cropped, (w_scaled, h_scaled), interpolation=cv2.INTER_AREA)
         return cropped
-
-    def report_callback_exception(self, exc_type, exc_value, exc_traceback):
-        handle_exception(exc_type, exc_value, exc_traceback)

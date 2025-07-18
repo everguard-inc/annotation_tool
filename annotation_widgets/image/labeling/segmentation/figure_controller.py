@@ -13,6 +13,8 @@ import numpy as np
 
 from typing import List
 
+from utils import safe_execution
+
 
 class MaskFigureController(AbstractFigureController):
 
@@ -76,10 +78,12 @@ class MaskFigureController(AbstractFigureController):
     def handle_mouse_move(self, x: int, y: int):
         self.cursor_x, self.cursor_y = x, y
 
+    @safe_execution(on_error=lambda self: self.figure_rollback())
     def handle_left_mouse_release(self, x: int, y: int):
         if self.mode is Mode.MOVING:
             self.mode = Mode.IDLE
 
+    @safe_execution(on_error=lambda self: self.figure_rollback())
     def handle_left_mouse_press(self, x: int, y: int):
         if self.mode is Mode.IDLE:
             self.mode = Mode.CREATE
@@ -92,6 +96,7 @@ class MaskFigureController(AbstractFigureController):
             else:
                 self.polygon.append((x, y))
 
+    @safe_execution(on_error=lambda self: self.figure_rollback())
     def handle_mouse_hover(self, x: int, y: int):
         if self.mode == Mode.CREATE:
             self.polygon[-1] = (x, y)
@@ -121,6 +126,7 @@ class MaskFigureController(AbstractFigureController):
 
         self.take_snapshot()
 
+    @safe_execution(on_error=lambda self: self.figure_rollback())
     def handle_space(self):
         if self.mode is Mode.CREATE:
             self.edit_mask(adding=self.addition_mode)
@@ -166,3 +172,7 @@ class MaskFigureController(AbstractFigureController):
                 cv2.circle(canvas, self.polygon[0], self.lock_distance, (255, 255, 255), 1)
 
         return canvas
+
+    def figure_rollback(self):
+        self.polygon = list()
+        self.mode = Mode.IDLE

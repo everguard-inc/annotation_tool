@@ -82,7 +82,6 @@ class ImageFilteringLogic(AbstractImageAnnotationLogic):
         if not self.cap.isOpened():
             raise WarningMessageBoxException(f"Error opening video file {data_path}")
 
-        assert False
         self.number_of_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         super().__init__(data_path=data_path, project_data=project_data)

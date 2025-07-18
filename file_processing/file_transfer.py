@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import os
 import time
 import traceback
 from typing import Callable
@@ -43,32 +44,42 @@ class FileTransferClient(ProcessingProgressBar):
             self.root.after(100, lambda: self.check_download_completion(future, uid, file_name))
 
 def download_file(uid, file_name, save_path, update_callback: Callable = None, should_terminate: Callable = None, ignore_404=False):
-    with requests.post(f"{settings.file_url}/download/{uid}/{file_name}", headers={'Authorization': f'Bearer {settings.token}'}, stream=True) as r:
-        
-        if r.status_code != 200:
-            if ignore_404 and r.status_code == 404:
-                return
-            else:
-                raise WarningMessageBoxException(f"Unable to download file {uid}:{file_name}. Error: {r.json()}")
-        total_size_in_bytes = int(r.headers.get('content-length', 0))
-        downloaded_size = 0
-        start_time = time.time()
+    temp_path = save_path + ".part"
+    try:
+        with requests.post(f"{settings.file_url}/download/{uid}/{file_name}", headers={'Authorization': f'Bearer {settings.token}'}, stream=True) as r:
 
-        with open(save_path, 'wb') as file:
-            for data in r.iter_content(1024):
-                if should_terminate is not None and should_terminate():
-                    print("Download terminated by user.")
+            if r.status_code != 200:
+                if ignore_404 and r.status_code == 404:
                     return
-                file.write(data)
-                if update_callback is not None:
-                    downloaded_size += len(data)
-                    elapsed_time = time.time() - start_time
-                    speed = downloaded_size / elapsed_time / (1024**2)  # Speed in MB/s
-                    remaining_time = (total_size_in_bytes - downloaded_size) / (downloaded_size / elapsed_time)
-                    percent_done = (downloaded_size / total_size_in_bytes) * 100
-                    update_callback(percent_done, downloaded_size / (1024**3), speed, remaining_time, processing_complete=False)
-        if update_callback is not None:
-            update_callback(percent_done, downloaded_size / (1024**3), speed, remaining_time, processing_complete=True)
+                else:
+                    raise WarningMessageBoxException(f"Unable to download file {uid}:{file_name}. Error: {r.json()}")
+            total_size_in_bytes = int(r.headers.get('content-length', 0))
+            downloaded_size = 0
+            start_time = time.time()
+
+            with open(temp_path, 'wb') as file:
+                for data in r.iter_content(1024):
+                    if should_terminate is not None and should_terminate():
+                        print("Download terminated by user.")
+                        return
+
+                    file.write(data)
+                    if update_callback is not None:
+                        downloaded_size += len(data)
+                        elapsed_time = time.time() - start_time
+                        speed = downloaded_size / elapsed_time / (1024**2)  # Speed in MB/s
+                        remaining_time = (total_size_in_bytes - downloaded_size) / (downloaded_size / elapsed_time)
+                        percent_done = (downloaded_size / total_size_in_bytes) * 100
+                        update_callback(percent_done, downloaded_size / (1024**3), speed, remaining_time, processing_complete=False)
+            if update_callback is not None:
+                update_callback(percent_done, downloaded_size / (1024**3), speed, remaining_time, processing_complete=True)
+
+        os.rename(temp_path, save_path)
+
+    except Exception as e:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise
 
 
 def upload_file(uid, file_path):
