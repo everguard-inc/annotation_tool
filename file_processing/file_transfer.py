@@ -7,6 +7,7 @@ from config import settings
 import requests
 from exceptions import WarningMessageBoxException
 from file_processing.progress_bar import ProcessingProgressBar
+from encryption import encryptor
 
 
 class FileTransferClient(ProcessingProgressBar):
@@ -44,9 +45,10 @@ class FileTransferClient(ProcessingProgressBar):
             self.root.after(100, lambda: self.check_download_completion(future, uid, file_name))
 
 def download_file(uid, file_name, save_path, update_callback: Callable = None, should_terminate: Callable = None, ignore_404=False):
+    token = encryptor.encrypt(settings.token)
     temp_path = save_path + ".part"
     try:
-        with requests.post(f"{settings.file_url}/download/{uid}/{file_name}", headers={'Authorization': f'Bearer {settings.token}'}, stream=True) as r:
+        with requests.post(f"{settings.file_url}/download/{uid}/{file_name}", headers={'Authorization': f'Bearer {token}'}, stream=True) as r:
 
             if r.status_code != 200:
                 if ignore_404 and r.status_code == 404:
@@ -90,7 +92,8 @@ def upload_file(uid, file_path):
         return "Error: The file does not exist or cannot be accessed."
 
     full_url = f"{settings.file_url}/upload/{uid}"
-    response = requests.post(full_url, files=files, headers={'Authorization': f'Bearer {settings.token}'})
+    token = encryptor.encrypt(settings.token)
+    response = requests.post(full_url, files=files, headers={'Authorization': f'Bearer {token}'})
 
     # Close the file to prevent resource leakage
     files['file'].close()

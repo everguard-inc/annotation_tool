@@ -4,8 +4,9 @@ import json
 import os
 from typing import Tuple, Callable, Union
 
-from PIL import Image
 import requests
+from PIL import Image
+
 
 from exceptions import WarningMessageBoxException
 from logging_config import logger
@@ -93,6 +94,7 @@ def get_img_size(img_path: str) -> Tuple[int, int]:
     im = Image.open(img_path)
     frame_width, frame_height = im.size
     return int(frame_width), int(frame_height)
+
 
 
 def safe_execution(on_error: Union[Callable, str] = None, message: str = None):
