@@ -17,7 +17,7 @@ def load_public_key():
     response = requests.get(url=url, headers=get_headers())
     if response.status_code == 200:
         return response.json()["public_key"]
-    raise MessageBoxException(f"Internal Server Error with connection to portal.")
+    raise ConnectionError(f"Failed to get public key: {response.status_code}")
 
 
 def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
