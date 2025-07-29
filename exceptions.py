@@ -21,7 +21,7 @@ class ExceptionWindow:
         self.root.resizable(True, True)
 
         self.text_area = scrolledtext.ScrolledText(self.root, wrap=tk.WORD)
-        self.text_area.insert(tk.END, f'{message} \n: Parent = {str(parent)}, IS_ROOT = {self._is_root}')
+        self.text_area.insert(tk.END, f'{message}')
         self.text_area.config(state=tk.DISABLED)
         self.text_area.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
         self.text_area.bind("<Button-1>", self._enable_selection)

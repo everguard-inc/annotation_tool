@@ -38,18 +38,16 @@ class FileTransferClient(ProcessingProgressBar):
         self.root.wait_window(self.root)
 
     def check_download_completion(self, future, uid, file_name):
-        # if not self.root.winfo_exists():
-        #     return
+        if not self.root.winfo_exists():
+            return
 
         if future.done():
             try:
                 future.result()  # This will raise any exceptions caught by the thread
             except Exception as e:
-                self.on_window_close()
                 raise FileDownloadError(f"Unable to download file {uid}/{file_name}. Error: {traceback.format_exc()}")
             finally:
                 time.sleep(0.5)
-                self.root.wait_window(self.root)
                 self.on_window_close()
         else:
             self.root.after(100, lambda: self.check_download_completion(future, uid, file_name))
@@ -59,7 +57,6 @@ def download_file(uid, file_name, save_path, update_callback: Callable = None, s
     temp_path = save_path + ".part"
     try:
         with requests.post(f"{settings.file_url}/download/{uid}/{file_name}", headers={'Authorization': f'Bearer {token}'}, stream=True) as r:
-            # raise FileDownloadError(f"Test failed")
             if r.status_code != 200:
                 if ignore_404 and r.status_code == 404:
                     return

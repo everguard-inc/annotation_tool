@@ -180,9 +180,7 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
         str2 = self.dicts_to_str([figure.serialize() for figure in figures2])
         return str1 == str2
         
-
-
-    def update_canvas(self): 
+    def update_canvas(self):
         assert self.orig_image is not None
 
         if self.project_data.stage is AnnotationStage.REVIEW:
