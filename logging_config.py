@@ -42,7 +42,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LOG_FILE_PATH = os.path.join(BASE_DIR, "app_error_logs.json")
 
 logger = logging.getLogger("Annotation Tool")
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.WARNING)
 
 file_handler = logging.FileHandler(LOG_FILE_PATH)
 file_handler.setLevel(logging.ERROR)

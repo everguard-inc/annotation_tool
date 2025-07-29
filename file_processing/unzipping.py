@@ -4,11 +4,15 @@ import traceback
 from typing import Callable
 import zipfile
 import time
-from exceptions import WarningMessageBoxException
+from exceptions import AppError
 from file_processing.progress_bar import ProcessingProgressBar
 
 
 class ArchiveUnzipper(ProcessingProgressBar):
+
+    def __str__(self):
+        return "Archive Unzipper Progress Bar"
+
     def unzip(self, archive_path, output_dir):
         
         assert os.path.isfile(archive_path), f"Archive {archive_path} not found"
@@ -41,7 +45,7 @@ class ArchiveUnzipper(ProcessingProgressBar):
             try:
                 future.result()  # This will raise any exceptions caught by the thread
             except Exception as e:
-                raise WarningMessageBoxException(f"The archive {archive_path} was not unzipped properly. Error: {traceback.format_exc()}")
+                raise AppError(f"The archive {archive_path} was not unzipped properly. Error: {traceback.format_exc()}")
 
             self.root.destroy()
         else:

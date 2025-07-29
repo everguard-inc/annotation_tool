@@ -12,6 +12,10 @@ from models import ProjectData
 
 
 class ImageLabelingWidget(AbstractImageAnnotationWidget):
+
+    def __str__(self):
+        return "Image Labeling Widget"
+
     def __init__(self, root: tk.Tk, io: ImageLabelingIO, logic: ImageLabelingLogic, project_data: ProjectData):
         super().__init__(root, io, logic, project_data)
 
@@ -37,4 +41,3 @@ class ImageLabelingWidget(AbstractImageAnnotationWidget):
         root.file_menu.add_command(label="Download and overwrite annotations", command=self.overwrite_annotations)
         root.help_menu.add_command(label="Classes", command=self.show_classes)
         root.help_menu.add_command(label="Review Labels", command=self.show_review_labels)
-

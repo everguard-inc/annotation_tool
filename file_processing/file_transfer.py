@@ -5,12 +5,16 @@ import traceback
 from typing import Callable
 from config import settings
 import requests
-from exceptions import WarningMessageBoxException
+from exceptions import FileUploadError, FileDownloadError
 from file_processing.progress_bar import ProcessingProgressBar
 from encryption import encryptor
 
 
 class FileTransferClient(ProcessingProgressBar):
+
+    def __str__(self):
+        return "File Transfer Progress Bar"
+
     def download(self, uid, file_name, save_path):
         self.processed_percent = 0
         self.processed_gb = 0
@@ -34,13 +38,19 @@ class FileTransferClient(ProcessingProgressBar):
         self.root.wait_window(self.root)
 
     def check_download_completion(self, future, uid, file_name):
+        # if not self.root.winfo_exists():
+        #     return
+
         if future.done():
             try:
                 future.result()  # This will raise any exceptions caught by the thread
             except Exception as e:
-                raise WarningMessageBoxException(f"Unable to download file {uid}/{file_name}. Error: {traceback.format_exc()}")
-            time.sleep(0.5)
-            self.root.destroy()
+                self.on_window_close()
+                raise FileDownloadError(f"Unable to download file {uid}/{file_name}. Error: {traceback.format_exc()}")
+            finally:
+                time.sleep(0.5)
+                self.root.wait_window(self.root)
+                self.on_window_close()
         else:
             self.root.after(100, lambda: self.check_download_completion(future, uid, file_name))
 
@@ -49,12 +59,12 @@ def download_file(uid, file_name, save_path, update_callback: Callable = None, s
     temp_path = save_path + ".part"
     try:
         with requests.post(f"{settings.file_url}/download/{uid}/{file_name}", headers={'Authorization': f'Bearer {token}'}, stream=True) as r:
-
+            # raise FileDownloadError(f"Test failed")
             if r.status_code != 200:
                 if ignore_404 and r.status_code == 404:
                     return
                 else:
-                    raise WarningMessageBoxException(f"Unable to download file {uid}:{file_name}. Error: {r.json()}")
+                    raise FileDownloadError(f"Unable to download file {uid}:{file_name}. Error: {r.json()}")
             total_size_in_bytes = int(r.headers.get('content-length', 0))
             downloaded_size = 0
             start_time = time.time()
@@ -103,7 +113,7 @@ def upload_file(uid, file_path):
             error_message = f"Status code: {response.status_code}, {response.json()}"
         except ValueError:
             error_message = f"Status code: {response.status_code}"
-        raise WarningMessageBoxException(f"Error: Server responded with {error_message} while uploading {file_path}")
+        raise FileUploadError(f"Error: Server responded with {error_message} while uploading {file_path}")
 
 
 if __name__ == "__main__":

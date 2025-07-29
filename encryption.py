@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 from api_requests import load_public_key
 from config import settings
+from exceptions import WebServerApiError
 
 
 class RSAEncryption:
@@ -50,7 +51,7 @@ class RSAEncryption:
             RSAEncryption._cached_public_key = public_key
             return public_key
 
-        except ConnectionError:
+        except WebServerApiError:
             if self.public_key_filepath.exists():
                 public_key_bytes = self.public_key_filepath.read_bytes()
                 RSAEncryption._cached_public_key = serialization.load_pem_public_key(public_key_bytes)

@@ -1,6 +1,6 @@
 import os
 from typing import Any, Dict
-from exceptions import WarningMessageBoxException
+from exceptions import AppError
 from utils import open_json, save_json
 
 
@@ -75,7 +75,7 @@ class Settings:
             result = result["value"]
         
         if result is None:
-            raise WarningMessageBoxException(f"Specify value of `{name}` in Project > Settings. Your current settings: {self.data}")
+            raise AppError(f"Specify value of `{name}` in Project > Settings. Your current settings: {self.data}")
         return result
 
     @property

@@ -1,8 +1,5 @@
-
 from abc import ABC, abstractmethod
 from enum import Enum, auto
-import json
-import random
 
 from annotation_widgets.image.models import Label
 
@@ -13,7 +10,7 @@ import numpy as np
 from typing import Dict, List, Optional, Tuple
 
 from enums import FigureType
-from utils import HistoryBuffer, safe_execution
+from utils import HistoryBuffer, safe_draw
 
 import cv2
 
@@ -191,25 +188,25 @@ class ObjectFigureController(AbstractFigureController):
         else:
             self.preview_figure = None
 
-    @safe_execution(on_error=lambda self: self.figure_rollback())
+    @safe_draw(on_error=lambda self: self.figure_rollback())
     def move_selected_figure(self, x, y):
         if self.selected_figure_id is not None:
             self.figures[self.selected_figure_id].move_active_point(x, y)
 
-    @safe_execution(on_error=lambda self: self.figure_rollback())
+    @safe_draw(on_error=lambda self: self.figure_rollback())
     def handle_mouse_move(self, x: int, y: int):
         self.cursor_x, self.cursor_y = x, y
         if self.mode is Mode.MOVING:
             self.move_selected_figure(x, y)
 
-    @safe_execution(on_error=lambda self: self.figure_rollback())
+    @safe_draw(on_error=lambda self: self.figure_rollback())
     def handle_left_mouse_release(self, x: int, y: int):
         if self.mode is Mode.MOVING:
             self.mode = Mode.IDLE
             self.take_snapshot()
         self.update_selection(x, y)
 
-    @safe_execution(on_error=lambda self: self.figure_rollback())
+    @safe_draw(on_error=lambda self: self.figure_rollback())
     def handle_left_mouse_press(self, x: int, y: int):
         if self.mode is Mode.IDLE:
             rect_id, point_id = self.get_selected_figure_id_and_point_id(x, y)
@@ -231,7 +228,7 @@ class ObjectFigureController(AbstractFigureController):
                 self.update_selection(x, y)
                 self.take_snapshot()
 
-    @safe_execution(on_error=lambda self: self.figure_rollback())
+    @safe_draw(on_error=lambda self: self.figure_rollback())
     def handle_mouse_hover(self, x: int, y: int):
         if self.mode is Mode.CREATE:
             self.update_preview_figure(x, y)
