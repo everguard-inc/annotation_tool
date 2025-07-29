@@ -7,3 +7,5 @@ tkinterweb
 tqdm
 pynput
 cryptography
+
+python-json-logger

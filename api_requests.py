@@ -3,7 +3,7 @@ from typing import List
 import requests
 
 from config import settings
-from exceptions import MessageBoxException
+from exceptions import WebServerApiError
 from models import ProjectData
 
 
@@ -16,7 +16,7 @@ def load_public_key():
     response = requests.get(url=url, headers=get_headers())
     if response.status_code == 200:
         return response.json()["public_key"]
-    raise MessageBoxException(f"Internal Server Error with connection to portal.")
+    raise WebServerApiError(f"Failed to get public key: {response.status_code}")
 
 
 def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
@@ -34,7 +34,7 @@ def get_projects_data(only_assigned_to_user: bool = True) -> List[ProjectData]:
             result.append(ProjectData.from_json(project))
         return result
     
-    raise MessageBoxException(f"Unable to get projects data. {response.status_code}")
+    raise WebServerApiError(f"Unable to get projects data. {response.status_code}")
 
 
 def complete_task(project_uid: int, duration_hours: float):
@@ -48,4 +48,4 @@ def complete_task(project_uid: int, duration_hours: float):
             message = response.json()
         except Exception as e:
             message = f"Internal Server Error with project uid {project_uid}"
-        raise MessageBoxException(message)
+        raise WebServerApiError(message)

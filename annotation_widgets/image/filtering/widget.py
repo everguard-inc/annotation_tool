@@ -13,6 +13,10 @@ from .logic import ImageFilteringLogic
 
 
 class ImageFilteringWidget(AbstractImageAnnotationWidget):
+
+    def __str__(self):
+        return "Image Filtering Widget"
+
     def __init__(self, root: tk.Tk, io: ImageFilteringIO, logic: ImageFilteringLogic, project_data: ProjectData):
         super().__init__(root, io, logic, project_data)
 

@@ -16,6 +16,10 @@ from models import ProjectData
 
 
 class EventValidationWidget(AbstractAnnotationWidget):
+
+    def __str__(self):
+        return "Event Validation Widget"
+
     def __init__(self, root: tk.Tk, io: EventValidationIO, logic: EventValidationLogic, project_data: ProjectData):
         self.logic: EventValidationLogic
         super().__init__(root, io, logic, project_data)

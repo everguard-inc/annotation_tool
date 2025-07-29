@@ -7,11 +7,13 @@ from cryptography.hazmat.primitives.asymmetric import padding
 
 from api_requests import load_public_key
 from config import settings
+from exceptions import WebServerApiError
 
 
 class RSAEncryption:
 
     public_key_pem_filename = f"public_key.pem"
+    _cached_public_key = None
 
     @property
     def public_key_filepath(self) -> Path:
@@ -39,18 +41,22 @@ class RSAEncryption:
         self.public_key_filepath.write_bytes(public_key_bytes)
 
     def get_public_key(self):
-        if os.path.exists(self.public_key_filepath):
-            public_key_bytes = self.public_key_filepath.read_bytes()
-            try:
-                public_key = serialization.load_pem_public_key(public_key_bytes)
-            except ValueError as e:
-                raise ValueError("Invalid public key format") from e
+        if RSAEncryption._cached_public_key:
+            return RSAEncryption._cached_public_key
 
-        else:
+        try:
             public_key_pem = load_public_key()
             public_key = serialization.load_pem_public_key(public_key_pem.encode("utf-8"))
             self.save_public_key(public_key_pem=public_key_pem)
+            RSAEncryption._cached_public_key = public_key
+            return public_key
 
-        return public_key
+        except WebServerApiError:
+            if self.public_key_filepath.exists():
+                public_key_bytes = self.public_key_filepath.read_bytes()
+                RSAEncryption._cached_public_key = serialization.load_pem_public_key(public_key_bytes)
+                return RSAEncryption._cached_public_key
+
+        raise FileNotFoundError("Unable to retrieve public key from remote or local sources.")
 
 encryptor = RSAEncryption()

@@ -2,13 +2,12 @@ import os
 import shutil
 import sys
 import threading
-from typing import Callable, List
+from typing import List
 from annotation_widgets.factory import get_io, get_widget
 
 import tkinter as tk
 from annotation_widgets.models import CheckResult
 from api_requests import get_projects_data
-from enums import AnnotationStage
 from exceptions import handle_exception
 from annotation_widgets.widget import AbstractAnnotationWidget
 from gui_utils import IdForm, MessageBox, ProjectSelector, SettingsManager, get_loading_window, show_html_window
@@ -27,6 +26,10 @@ from tkinter import PhotoImage
 
 
 class MainWindow(tk.Tk):
+
+    def __str__(self):
+        return "Main Window"
+
     def __init__(self):
         super().__init__()
         icon = PhotoImage(file=os.path.join(os.path.dirname(os.path.realpath(__file__)), "icon.png"))
@@ -61,7 +64,7 @@ class MainWindow(tk.Tk):
         
         # Attach the menu bar to the window
         self.config(menu=self.menu_bar)
-        
+
         # Remove completed projects
         thread = threading.Thread(target=self.remove_completed_projects)
         thread.daemon = True 
@@ -225,4 +228,4 @@ class MainWindow(tk.Tk):
         show_html_window(self, title="How to use this tool?", html_content=html_content)
 
     def report_callback_exception(self, exc_type, exc_value, exc_traceback):
-        handle_exception(exc_type, exc_value, exc_traceback)
+        handle_exception(exc_type, exc_value, exc_traceback, app_root=self)

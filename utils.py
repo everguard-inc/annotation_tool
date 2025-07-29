@@ -1,10 +1,13 @@
+import functools
+from datetime import datetime
 import json
 import os
-from datetime import datetime
-from typing import Tuple
+from typing import Tuple, Callable, Union
 
 import requests
 from PIL import Image
+
+from exceptions import DrawingError
 
 
 def open_json(detections_file):
@@ -89,3 +92,20 @@ def get_img_size(img_path: str) -> Tuple[int, int]:
     im = Image.open(img_path)
     frame_width, frame_height = im.size
     return int(frame_width), int(frame_height)
+
+
+def safe_draw(on_error: Union[Callable, str] = None):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            try:
+                return func(self, *args, **kwargs)
+            except Exception as e:
+                if callable(on_error):
+                    on_error(self)
+
+                elif isinstance(on_error, str) and hasattr(self, on_error):
+                    getattr(self, on_error)()
+                raise DrawingError(e)
+        return wrapper
+    return decorator

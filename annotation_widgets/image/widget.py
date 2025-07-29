@@ -102,8 +102,6 @@ class AbstractImageAnnotationWidget(AbstractAnnotationWidget):
         self.update_frame = True
         self.schedule_update()
 
-    def report_callback_exception(self, exc_type, exc_value, exc_traceback):
-        handle_exception(exc_type, exc_value, exc_traceback)
 
     def check_before_completion(self) -> CheckResult:
         self.logic.save_item()
@@ -443,6 +441,3 @@ class CanvasView(tk.Canvas):
 
         cropped = cv2.resize(cropped, (w_scaled, h_scaled), interpolation=cv2.INTER_AREA)
         return cropped
-
-    def report_callback_exception(self, exc_type, exc_value, exc_traceback):
-        handle_exception(exc_type, exc_value, exc_traceback)
