@@ -251,6 +251,13 @@ class ObjectFigureController(AbstractFigureController):
                 self.selected_figure_id, near_point_id = self.get_selected_figure_id_and_point_id(self.cursor_x, self.cursor_y)
             self.take_snapshot()
 
+    def delete_all_command(self):
+        for figure in self.figures:
+            figure.delete()
+        self.figures = list()
+        self.selected_figure_id = None
+        self.take_snapshot()
+    
     def change_label(self, label: Label):
         self.active_label = label
         if self.selected_figure_id is not None:

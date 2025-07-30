@@ -376,6 +376,11 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
         self.controller.delete_command()
         self.item_changed = True
 
+    def remove_all_objects(self):
+        if self.editing_blocked: return 
+        self.controller.delete_all_command()
+        self.item_changed = True
+
     def handle_left_mouse_press(self, x: int, y: int):
         if self.editing_blocked: return
         self.controller.handle_left_mouse_press(x, y)
@@ -438,3 +443,5 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
             self.switch_object_size_visibility() 
         elif key.lower() == "s":
             self.make_image_worse = not self.make_image_worse
+        elif key.lower() == "g":
+            self.remove_all_objects() 
