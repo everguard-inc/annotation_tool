@@ -160,13 +160,6 @@ class KeypointGroup(Figure):
         ) -> np.ndarray:
 
         line_width = max(1, int(3 / ((elements_scale_factor + 1e-7) ** (1/3))))
-
-        if self.selected:
-            if elements_scale_factor < 3:
-                line_width += 2
-            else:
-                line_width += 1
-
         kp_dict: Dict[str, Point] = self.keypoints_as_dict
 
 
