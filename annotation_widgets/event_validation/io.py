@@ -62,7 +62,7 @@ class EventValidationIO(AbstractAnnotationIO):
         Value.update_value("fields", json.dumps(fields_tree_data), overwrite=True)
 
         events = []
-        pattern = r'event-(?P<uid>[a-f0-9\-]+)\.[a-z0-9]+$'
+        pattern = r'(?P<uid>[a-f0-9\-]+)\.[a-z0-9]+$'
 
         # Import Events stored in event_validation_results_json
         if os.path.isfile(self.pm.event_validation_results_json_path):

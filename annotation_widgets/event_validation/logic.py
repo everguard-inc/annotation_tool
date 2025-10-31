@@ -81,7 +81,7 @@ class EventValidationLogic(AbstractImageAnnotationLogic):
 
     @staticmethod
     def _get_uid_from_name(name) -> Optional[str]:
-        pattern = r'event-(?P<uid>[a-f0-9\-]+)\.[a-z0-9]+$'
+        pattern = r'(?P<uid>[a-f0-9\-]+)\.[a-z0-9]+$'
         match = re.search(pattern, name)
         if match:
             return match.group('uid')

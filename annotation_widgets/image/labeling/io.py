@@ -2,6 +2,8 @@ import json
 import os
 import tkinter as tk
 from typing import Dict, List
+
+from tqdm import tqdm
 from annotation_widgets.image.io import ImageIO
 from annotation_widgets.image.models import Label
 from api_requests import get_project_data
@@ -186,7 +188,7 @@ class ImageLabelingIO(ImageIO):
         LabeledImage.save_batch(limages)
 
         # Review labels
-        if os.path.isfile(self.pm.review_ann_path ):
+        if os.path.isfile(self.pm.review_ann_path):
             review_data = open_json(self.pm.review_ann_path)
 
             # Check how many images with review labels
@@ -198,7 +200,7 @@ class ImageLabelingIO(ImageIO):
             show_all = number_for_correction == 0
 
             limages = list()
-            for img_name in os.listdir(self.pm.images_path):
+            for img_name in tqdm(os.listdir(self.pm.images_path)):
                 image = LabeledImage.get(name=img_name)
                 review_data_for_image = review_data.get(img_name, [])
 
