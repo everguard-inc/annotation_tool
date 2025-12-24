@@ -426,8 +426,26 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
         self.controller.paste()
         self.item_changed = True
 
+    def copy_from_previous_image(self):
+        if self.editing_blocked: return
+        if self.item_id == 0: return
+
+        prev_img_name = self.img_names[self.item_id - 1]
+        prev_labeled_image = LabeledImage.get(name=prev_img_name)
+
+        prev_figures = []
+        if self.project_data.stage is AnnotationStage.REVIEW:
+            prev_figures = [fig.copy() for fig in prev_labeled_image.review_labels]
+        else:
+            all_figs = prev_labeled_image.bboxes + prev_labeled_image.kgroups + prev_labeled_image.masks
+            prev_figures = [fig.copy() for fig in all_figs]
+
+        self.controller.figures = prev_figures
+        self.controller.take_snapshot()
+        self.item_changed = True
+
     def handle_key(self, key: str):
-        if key.isdigit(): 
+        if key.isdigit():
             self.change_label(key)
         elif key.lower() == "d":
             self.delete_command()
@@ -444,4 +462,6 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
         elif key.lower() == "s":
             self.make_image_worse = not self.make_image_worse
         elif key.lower() == "g":
-            self.remove_all_objects() 
+            self.remove_all_objects()
+        elif key.lower() == "u":
+            self.copy_from_previous_image() 
