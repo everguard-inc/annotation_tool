@@ -15,7 +15,7 @@ class AbstractAnnotationLogic(ABC):
         self.project_data: ProjectData = project_data
 
         self.tick_time = time.time()
-        self.max_action_time_sec = 60
+        self.max_action_time_sec = 60*5
         self.item_id = 0 
         self.duration_hours = 0
         self.processed_item_ids: set = set()
