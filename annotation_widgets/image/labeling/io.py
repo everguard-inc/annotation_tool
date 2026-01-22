@@ -200,7 +200,7 @@ class ImageLabelingIO(ImageIO):
             show_all = number_for_correction == 0
 
             limages = list()
-            for img_name in tqdm(os.listdir(self.pm.images_path)):
+            for img_name in os.listdir(self.pm.images_path):
                 image = LabeledImage.get(name=img_name)
                 review_data_for_image = review_data.get(img_name, [])
 
