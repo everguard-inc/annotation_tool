@@ -3,6 +3,7 @@ import os
 import shutil
 from tkinter import messagebox
 import tkinter as tk
+from typing import Optional
 
 from api_requests import complete_task
 from db import configure_database
@@ -28,6 +29,11 @@ class AbstractAnnotationIO(ABC):
             stage = local_project_data.stage
         return stage
     
+    @property
+    def project_id(self) -> Optional[int]:
+        if self.project_data:
+            return self.project_data.id
+        
     def update_stage(self, stage: AnnotationStage):
         assert os.path.isfile(self.pm.state_path)
         project_data = ProjectData.from_json(open_json(self.pm.state_path))
@@ -48,7 +54,7 @@ class AbstractAnnotationIO(ABC):
         configure_database(self.pm.db_path)
         if self.should_be_overwritten:
             self.download_project(root=root)
-            loading_window = get_loading_window(text="Overwritting project...", root=root)
+            loading_window = get_loading_window(text=f"Initializing project {self.project_id}...", root=root)
             self.overwrite_project()
             self.reset_counters()
             loading_window.destroy()

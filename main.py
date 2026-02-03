@@ -132,6 +132,7 @@ class MainWindow(tk.Tk):
         if project_data is not None: 
             io = get_io(project_data)
             io.download_project(root=self)
+            io.initialize_project(root=self)
 
 
     def remove_project(self):
