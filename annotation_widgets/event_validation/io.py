@@ -78,20 +78,16 @@ class EventValidationIO(AbstractAnnotationIO):
                 )
 
         for video_name in sorted(os.listdir(self.pm.videos_path)):
-            match = re.search(pattern, str(video_name))
-            if match:
-                video_uid = match.group("uid")
-                event_obj = Event(uid=video_uid)
+            video_base_name = os.path.splitext(video_name)[0]
+            event_obj = Event(uid=video_base_name)
 
-                if imported_events_data is not None:
-                    imported_event = imported_events_data.get("events", {}).get(video_uid)
-                    if imported_event is not None:
-                        event_obj.custom_fields = json.dumps(imported_event.get("answers"))
-                        event_obj.comment = imported_event.get("comment") if imported_event.get("comment") else None
+            if imported_events_data is not None:
+                imported_event = imported_events_data.get("events", {}).get(video_base_name)
+                if imported_event is not None:
+                    event_obj.custom_fields = json.dumps(imported_event.get("answers"))
+                    event_obj.comment = imported_event.get("comment") if imported_event.get("comment") else None
 
-                events.append(event_obj)
-            else:
-                raise RuntimeError(f"Incorrect video name format {video_name}")
+            events.append(event_obj)
 
         assert len(events) == len(os.listdir(self.pm.videos_path))
 
@@ -124,7 +120,7 @@ class EventValidationIO(AbstractAnnotationIO):
                 "Status (TP/FP)"
             ],
             "events" {
-                "76a4365d-25cb-4403-a76e-cfe70016a8e7": {
+                "ev_2cc54642_2026-02-28-12-15-23_e971ed86-0e62-4756-9258-765014e52e05": {
                     "answers": ["True", None, "TP"],
                     "comment": "..."
                 }

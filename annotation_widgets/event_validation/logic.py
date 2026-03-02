@@ -64,7 +64,7 @@ class EventValidationLogic(AbstractImageAnnotationLogic):
 
         # Set view mode
         self.view_mode: EventViewMode = None
-        self.change_view_mode(EventViewMode.IMAGE)
+        self.change_view_mode(EventViewMode.VIDEO)
 
         super().__init__(data_path=data_path, project_data=project_data)
 
@@ -116,7 +116,7 @@ class EventValidationLogic(AbstractImageAnnotationLogic):
         assert 0 <= self.item_id < self.items_number, f"The Image ID {self.item_id} is out of range of the images list: {self.items_number}"
 
 
-        item_uid = self._get_uid_from_name(f"{self.item_base_names[self.item_id]}.mp4")
+        item_uid = self.item_base_names[self.item_id] 
         if item_uid is None:
             return
         self.event = Event.get(uid=item_uid)
