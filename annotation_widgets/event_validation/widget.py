@@ -150,13 +150,3 @@ class EventValidationWidget(AbstractAnnotationWidget):
         self.unbind_all("<Button-1>") 
         self.unbind_all("<Button-3>") 
         super().close()
-
-    def check_before_completion(self) -> CheckResult:
-        self.logic.save_item()
-        self.logic.save_state()
-        if unanswered_events := Event.get_unvalidated_event_ids():
-            return CheckResult(
-                ready_to_complete=False,
-                message=f"Events № {unanswered_events} are not answered. Finish them to complete the project"
-            )
-        return CheckResult()
