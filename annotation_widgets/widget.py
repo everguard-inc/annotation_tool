@@ -74,9 +74,11 @@ class AbstractAnnotationWidget(tk.Frame):
     def remove_project(self):
         self.io.remove_project()
 
-    @abstractmethod
+    
     def check_before_completion(self) -> CheckResult:
-        raise NotImplementedError
+        self.logic.save_item()
+        self.logic.save_state()
+        return CheckResult()
 
     def complete_annotation(self, root: tk.Tk):
         self.logic.stop_tracking()
