@@ -6,6 +6,9 @@ from pathlib import Path
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from annotation_tool.core.enums import AnnotationMode, AnnotationStage
+from annotation_tool.core.models import ProjectData
+
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -33,12 +36,12 @@ def valid_settings_file(tmp_path: Path) -> Path:
                     "data_dir": {"type": "string", "value": str(data_dir)},
                 },
                 "interface": {
-                    "bbox_line_width": {"type": "number", "value": 4.0},
-                    "cursor_proximity_threshold": {"type": "number", "value": 5.0},
-                    "objects_opacity": {"type": "number", "value": 0.8},
-                    "color_fill_opacity": {"type": "number", "value": 0.2},
-                    "bbox_handler_size": {"type": "number", "value": 6.0},
-                    "keypoint_handler_size": {"type": "number", "value": 7.0},
+                    "bbox_line_width": {"type": "number", "value": 3.0},
+                    "cursor_proximity_threshold": {"type": "number", "value": 3.0},
+                    "objects_opacity": {"type": "number", "value": 0.9},
+                    "color_fill_opacity": {"type": "number", "value": 0.1},
+                    "bbox_handler_size": {"type": "number", "value": 3.0},
+                    "keypoint_handler_size": {"type": "number", "value": 5.0},
                 },
             }
         ),
@@ -46,3 +49,13 @@ def valid_settings_file(tmp_path: Path) -> Path:
     )
 
     return settings_path
+
+
+@pytest.fixture
+def sample_project() -> ProjectData:
+    return ProjectData(
+        id=7,
+        uid="project-uid-7",
+        stage=AnnotationStage.ANNOTATE,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )

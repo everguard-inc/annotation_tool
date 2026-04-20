@@ -16,8 +16,8 @@ def test_settings_store_loads_values_and_creates_data_dir(valid_settings_file: P
     assert settings.api_url == "https://api.example.com"
     assert settings.file_url == "https://files.example.com"
     assert settings.data_dir.exists()
-    assert settings.bbox_line_width == 4.0
-    assert settings.keypoint_handler_size == 7.0
+    assert settings.bbox_line_width == 3.0
+    assert settings.keypoint_handler_size == 5.0
 
 
 def test_settings_store_detects_empty_required_values(tmp_path: Path) -> None:

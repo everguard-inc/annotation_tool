@@ -4,12 +4,20 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMessageBox
 
-from annotation_tool.core.exceptions import UserVisibleError
+from annotation_tool.core.exceptions import BackendError, UserVisibleError
+from annotation_tool.core.models import ProjectData
 from annotation_tool.core.settings import AppSettings, SettingsStore
 from annotation_tool.infrastructure.api_client import ApiClient
+from annotation_tool.infrastructure.repositories.project_repository import ProjectRepository
+from annotation_tool.services.completion_service import CompletionService
+from annotation_tool.services.project_service import ProjectService
 from annotation_tool.ui.actions import AppActions
 from annotation_tool.ui.dialogs.error_dialog import ErrorDialog
+from annotation_tool.ui.dialogs.id_dialog import IdDialog
+from annotation_tool.ui.dialogs.project_selector_dialog import ProjectSelectorDialog
 from annotation_tool.ui.dialogs.settings_dialog import SettingsDialog
+from annotation_tool.ui.screens.base_screen import BaseProjectScreen
+from annotation_tool.ui.screens.project_placeholder_screen import ProjectPlaceholderScreen
 from annotation_tool.ui.widgets.html_window import HtmlWindow
 
 
@@ -20,7 +28,11 @@ class MainWindow(QMainWindow):
         self.settings_store = settings_store
         self.settings: AppSettings | None = None
         self.api_client: ApiClient | None = None
-        self.project_id: int | None = None
+        self.project_service: ProjectService | None = None
+        self.completion_service: CompletionService | None = None
+
+        self.current_project: ProjectData | None = None
+        self.current_screen: BaseProjectScreen | None = None
         self.html_windows: list[HtmlWindow] = []
 
         self.setWindowTitle("Annotation tool")
@@ -42,14 +54,22 @@ class MainWindow(QMainWindow):
                 self.open_settings()
 
             self.settings = self.settings_store.load()
-            self.api_client = ApiClient(self.settings.api_url, self.settings.token)
+            self._build_services()
         except UserVisibleError as error:
             ErrorDialog.show_error(str(error), self)
             self.open_settings()
 
-    def set_current_project_title(self, project_id: int | None) -> None:
-        self.project_id = project_id
+    def _build_services(self) -> None:
+        if self.settings is None:
+            return
 
+        self.api_client = ApiClient(self.settings.api_url, self.settings.token)
+        repository = ProjectRepository(self.settings.data_dir)
+
+        self.project_service = ProjectService(self.api_client, repository)
+        self.completion_service = CompletionService(self.api_client, repository)
+
+    def set_current_project_title(self, project_id: int | None) -> None:
         if project_id is None:
             self.setWindowTitle("Annotation tool")
             self.actions.set_project_opened(False)
@@ -59,30 +79,120 @@ class MainWindow(QMainWindow):
         self.actions.set_project_opened(True)
 
     def open_project(self) -> None:
-        self._not_implemented_until_stage_2("Open project will be implemented in Stage 2.")
+        if self.project_service is None:
+            ErrorDialog.show_error("Project service is not configured.", self)
+            return
+
+        try:
+            projects = self.project_service.get_available_projects()
+            if not projects:
+                QMessageBox.information(self, "Projects", "No projects available.")
+                return
+
+            project = self._select_project(projects, "Open project")
+            if project is None:
+                return
+
+            opened_project = self.project_service.open_project(project)
+            self._set_project_screen(opened_project)
+        except UserVisibleError as error:
+            ErrorDialog.show_error(str(error), self)
 
     def download_project(self) -> None:
-        self._not_implemented_until_stage_2("Download project will be implemented in Stage 2.")
+        if self.project_service is None:
+            ErrorDialog.show_error("Project service is not configured.", self)
+            return
+
+        try:
+            projects = self.project_service.get_projects_from_backend()
+            if not projects:
+                QMessageBox.information(self, "Projects", "No projects available for download.")
+                return
+
+            project = self._select_project(projects, "Download project")
+            if project is None:
+                return
+
+            self.project_service.download_project(project)
+            QMessageBox.information(self, "Download", f"Project {project.id} downloaded.")
+        except UserVisibleError as error:
+            ErrorDialog.show_error(str(error), self)
 
     def remove_project(self) -> None:
-        self._not_implemented_until_stage_2("Remove project will be implemented in Stage 2.")
+        if self.project_service is None:
+            ErrorDialog.show_error("Project service is not configured.", self)
+            return
+
+        projects = self.project_service.get_local_projects(include_broken=True)
+        if not projects:
+            QMessageBox.information(self, "Projects", "No local projects.")
+            return
+
+        project = self._select_project(projects, "Remove local project")
+        if project is None:
+            return
+
+        agree = QMessageBox.question(
+            self,
+            "Remove project",
+            f"Remove project {project.id} from this computer?",
+        )
+        if agree != QMessageBox.StandardButton.Yes:
+            return
+
+        self.project_service.remove_project(project.id)
+
+        if self.current_project is not None and self.current_project.id == project.id:
+            self._close_current_project()
+
+        QMessageBox.information(self, "Project removed", f"Project {project.id} removed.")
 
     def go_to_id(self) -> None:
-        self._not_implemented_until_stage_2("Go to ID will be implemented in Stage 2.")
+        if self.current_screen is None:
+            return
+
+        dialog = IdDialog(self.current_screen.items_count, self)
+        if dialog.exec() != IdDialog.DialogCode.Accepted:
+            return
+
+        selected_id = dialog.selected_id()
+        if selected_id is None:
+            return
+
+        self.current_screen.go_to_id(selected_id - 1)
+        self.statusBar().showMessage(f"Moved to item {selected_id}", 3000)
 
     def complete_project(self) -> None:
-        if self.api_client is None:
-            ErrorDialog.show_error("Backend is not configured.", self)
+        if self.current_project is None or self.current_screen is None:
             return
 
-        if not self.api_client.is_available():
-            ErrorDialog.show_error(
-                "Unable to reach a web service. Project is not completed.",
-                self,
+        if self.completion_service is None:
+            ErrorDialog.show_error("Completion service is not configured.", self)
+            return
+
+        agree = QMessageBox.question(
+            self,
+            "Project Completion",
+            "Are you sure you want to complete the project?",
+        )
+        if agree != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self.current_screen.save()
+
+            completed_project = self.completion_service.complete_current_project(
+                project=self.current_project,
+                duration_hours=self.current_screen.duration_hours,
+                export_results=self.current_screen.export_results,
+                should_remove_after_completion=lambda _: self.current_screen.should_remove_after_completion(),
             )
-            return
 
-        self._not_implemented_until_stage_2("Project completion flow will be implemented in Stage 2.")
+            self.current_project = completed_project
+            self._close_current_project()
+            QMessageBox.information(self, "Success", "Project completed.")
+        except UserVisibleError as error:
+            ErrorDialog.show_error(str(error), self)
 
     def open_settings(self) -> None:
         try:
@@ -94,7 +204,7 @@ class MainWindow(QMainWindow):
 
             self.settings_store.save(dialog.settings())
             self.settings = self.settings_store.load()
-            self.api_client = ApiClient(self.settings.api_url, self.settings.token)
+            self._build_services()
             self.statusBar().showMessage("Settings saved", 3000)
         except UserVisibleError as error:
             ErrorDialog.show_error(str(error), self)
@@ -129,7 +239,37 @@ class MainWindow(QMainWindow):
         self._show_html_window("Hotkeys", "hotkeys.html")
 
     def closeEvent(self, event) -> None:
+        if self.current_screen is not None:
+            self.current_screen.close_screen()
         event.accept()
+
+    def _select_project(self, projects: list[ProjectData], title: str) -> ProjectData | None:
+        dialog = ProjectSelectorDialog(projects, title, self)
+        if dialog.exec() != ProjectSelectorDialog.DialogCode.Accepted:
+            return None
+        return dialog.selected_project()
+
+    def _set_project_screen(self, project: ProjectData) -> None:
+        if self.current_screen is not None:
+            self.current_screen.close_screen()
+            self.current_screen.deleteLater()
+
+        self.current_project = project
+        self.current_screen = ProjectPlaceholderScreen(project, self)
+        self.setCentralWidget(self.current_screen)
+        self.set_current_project_title(project.id)
+
+    def _close_current_project(self) -> None:
+        if self.current_screen is not None:
+            self.current_screen.close_screen()
+            self.current_screen.deleteLater()
+
+        self.current_project = None
+        self.current_screen = None
+        self.placeholder = QLabel("No project opened", self)
+        self.placeholder.setStyleSheet("font-size: 18px;")
+        self.setCentralWidget(self.placeholder)
+        self.set_current_project_title(None)
 
     def _safe_settings_for_dialog(self) -> AppSettings:
         if self.settings is not None:
@@ -156,9 +296,6 @@ class MainWindow(QMainWindow):
         window = HtmlWindow(title, html_path, self)
         window.show()
         self.html_windows.append(window)
-
-    def _not_implemented_until_stage_2(self, message: str) -> None:
-        QMessageBox.information(self, "Not implemented yet", message)
 
 
 def run_app() -> None:
