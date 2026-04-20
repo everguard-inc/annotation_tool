@@ -1,27 +1,25 @@
-import json
-import os
-from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from annotation_tool.core.exceptions import SettingsError
+from annotation_tool.core.utils import read_json, write_json
 
 
-DEFAULT_SETTINGS: dict[str, dict[str, dict[str, Any]]] = {
+DEFAULT_SETTINGS = {
     "general": {
-        "token": {"type": "string", "value": None},
-        "api_url": {"type": "string", "value": None},
-        "file_url": {"type": "string", "value": None},
-        "data_dir": {"type": "string", "value": None},
+        "token": {"type": "string", "value": ""},
+        "api_url": {"type": "string", "value": ""},
+        "file_url": {"type": "string", "value": ""},
+        "data_dir": {"type": "string", "value": ""},
     },
     "interface": {
-        "bbox_line_width": {"type": "number", "value": 3.0, "min": 1, "max": 10, "step": 1},
-        "cursor_proximity_threshold": {"type": "number", "value": 3.0, "min": 1, "max": 10, "step": 1},
-        "objects_opacity": {"type": "number", "value": 0.9, "min": 0, "max": 1, "step": 0.1},
-        "color_fill_opacity": {"type": "number", "value": 0.1, "min": 0, "max": 1, "step": 0.1},
-        "bbox_handler_size": {"type": "number", "value": 3.0, "min": 1, "max": 10, "step": 1},
-        "keypoint_handler_size": {"type": "number", "value": 5.0, "min": 1, "max": 10, "step": 1},
+        "bbox_line_width": {"type": "number", "value": 3.0},
+        "cursor_proximity_threshold": {"type": "number", "value": 3.0},
+        "objects_opacity": {"type": "number", "value": 0.9},
+        "color_fill_opacity": {"type": "number", "value": 0.1},
+        "bbox_handler_size": {"type": "number", "value": 3.0},
+        "keypoint_handler_size": {"type": "number", "value": 5.0},
     },
 }
 
@@ -43,96 +41,103 @@ class AppSettings:
 class SettingsStore:
     def __init__(self, path: Path) -> None:
         self.path = path
-        self._raw = deepcopy(DEFAULT_SETTINGS)
+        self.ensure_exists()
+
+    def ensure_exists(self) -> None:
+        if not self.path.exists():
+            write_json(self.path, DEFAULT_SETTINGS)
 
     def load(self) -> AppSettings:
-        self._raw = self._load_raw()
-        self._save_raw(self._raw)
-        return self._to_settings(self._raw)
+        data = self._merged_data()
 
-    def save(self, settings: AppSettings) -> None:
-        self._raw["general"]["token"]["value"] = settings.token
-        self._raw["general"]["api_url"]["value"] = settings.api_url
-        self._raw["general"]["file_url"]["value"] = settings.file_url
-        self._raw["general"]["data_dir"]["value"] = str(settings.data_dir)
+        token = self._value(data, "general", "token")
+        api_url = self._value(data, "general", "api_url").rstrip("/")
+        file_url = self._value(data, "general", "file_url").rstrip("/")
+        data_dir_raw = self._value(data, "general", "data_dir")
 
-        self._raw["interface"]["bbox_line_width"]["value"] = settings.bbox_line_width
-        self._raw["interface"]["cursor_proximity_threshold"]["value"] = settings.cursor_proximity_threshold
-        self._raw["interface"]["objects_opacity"]["value"] = settings.objects_opacity
-        self._raw["interface"]["color_fill_opacity"]["value"] = settings.color_fill_opacity
-        self._raw["interface"]["bbox_handler_size"]["value"] = settings.bbox_handler_size
-        self._raw["interface"]["keypoint_handler_size"]["value"] = settings.keypoint_handler_size
+        missing = self.missing_required_values(data)
+        if missing:
+            raise SettingsError(f"Missing required settings: {', '.join(missing)}")
 
-        self._save_raw(self._raw)
-        self._ensure_data_dir(settings.data_dir)
-
-    def raw(self) -> dict[str, Any]:
-        return deepcopy(self._raw)
-
-    def has_empty_required_values(self) -> bool:
-        raw = self._load_raw()
-        for key in ("token", "api_url", "file_url", "data_dir"):
-            value = raw["general"][key]["value"]
-            if value is None or str(value).strip() == "":
-                return True
-        return False
-
-    def _load_raw(self) -> dict[str, Any]:
-        raw = deepcopy(DEFAULT_SETTINGS)
-
-        if self.path.exists():
-            with self.path.open("r", encoding="utf-8") as file:
-                user_raw = json.load(file)
-
-            self._merge_existing_values(raw, user_raw)
-
-        return raw
-
-    def _merge_existing_values(self, target: dict[str, Any], source: dict[str, Any]) -> None:
-        for section_name, section in target.items():
-            source_section = source.get(section_name, {})
-            for key, setting in section.items():
-                if key in source_section and "value" in source_section[key]:
-                    setting["value"] = source_section[key]["value"]
-
-    def _save_raw(self, raw: dict[str, Any]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-
-        with self.path.open("w", encoding="utf-8") as file:
-            json.dump(raw, file, indent=4)
-
-        try:
-            os.chmod(self.path, 0o600)
-        except OSError:
-            pass
-
-    def _to_settings(self, raw: dict[str, Any]) -> AppSettings:
-        def value(section: str, name: str) -> Any:
-            result = raw[section][name]["value"]
-            if result is None or str(result).strip() == "":
-                raise SettingsError(f"Specify `{name}` in Project > Settings.")
-            return result
-
-        data_dir = Path(value("general", "data_dir")).expanduser()
-        self._ensure_data_dir(data_dir)
+        data_dir = Path(data_dir_raw).expanduser()
+        data_dir.mkdir(parents=True, exist_ok=True)
 
         return AppSettings(
-            token=str(value("general", "token")),
-            api_url=str(value("general", "api_url")).rstrip("/"),
-            file_url=str(value("general", "file_url")).rstrip("/"),
+            token=token,
+            api_url=api_url,
+            file_url=file_url,
             data_dir=data_dir,
-            bbox_line_width=float(value("interface", "bbox_line_width")),
-            cursor_proximity_threshold=float(value("interface", "cursor_proximity_threshold")),
-            objects_opacity=float(value("interface", "objects_opacity")),
-            color_fill_opacity=float(value("interface", "color_fill_opacity")),
-            bbox_handler_size=float(value("interface", "bbox_handler_size")),
-            keypoint_handler_size=float(value("interface", "keypoint_handler_size")),
+            bbox_line_width=float(self._value(data, "interface", "bbox_line_width")),
+            cursor_proximity_threshold=float(self._value(data, "interface", "cursor_proximity_threshold")),
+            objects_opacity=float(self._value(data, "interface", "objects_opacity")),
+            color_fill_opacity=float(self._value(data, "interface", "color_fill_opacity")),
+            bbox_handler_size=float(self._value(data, "interface", "bbox_handler_size")),
+            keypoint_handler_size=float(self._value(data, "interface", "keypoint_handler_size")),
         )
 
-    def _ensure_data_dir(self, data_dir: Path) -> None:
-        try:
-            data_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as error:
-            self._raw["general"]["data_dir"]["value"] = None
-            self._save_raw(self._raw)
-            raise SettingsError(f"Unable to create data_dir in '{data_dir}'.") from error
+    def save(self, settings: AppSettings) -> None:
+        data = self._merged_data()
+
+        data["general"]["token"]["value"] = settings.token.strip()
+        data["general"]["api_url"]["value"] = settings.api_url.strip().rstrip("/")
+        data["general"]["file_url"]["value"] = settings.file_url.strip().rstrip("/")
+        data["general"]["data_dir"]["value"] = str(settings.data_dir).strip()
+
+        data["interface"]["bbox_line_width"]["value"] = settings.bbox_line_width
+        data["interface"]["cursor_proximity_threshold"]["value"] = settings.cursor_proximity_threshold
+        data["interface"]["objects_opacity"]["value"] = settings.objects_opacity
+        data["interface"]["color_fill_opacity"]["value"] = settings.color_fill_opacity
+        data["interface"]["bbox_handler_size"]["value"] = settings.bbox_handler_size
+        data["interface"]["keypoint_handler_size"]["value"] = settings.keypoint_handler_size
+
+        write_json(self.path, data)
+        self.path.chmod(0o600)
+
+    def has_empty_required_values(self) -> bool:
+        return bool(self.missing_required_values(self._merged_data()))
+
+    def missing_required_values(self, data: dict[str, Any] | None = None) -> list[str]:
+        data = data or self._merged_data()
+        required = ["token", "api_url", "file_url", "data_dir"]
+
+        return [
+            name
+            for name in required
+            if not str(self._value(data, "general", name)).strip()
+        ]
+
+    def draft_settings(self) -> AppSettings:
+        data = self._merged_data()
+
+        return AppSettings(
+            token=str(self._value(data, "general", "token")),
+            api_url=str(self._value(data, "general", "api_url")),
+            file_url=str(self._value(data, "general", "file_url")),
+            data_dir=Path(str(self._value(data, "general", "data_dir")) or str(Path.home() / "annotation")),
+            bbox_line_width=float(self._value(data, "interface", "bbox_line_width")),
+            cursor_proximity_threshold=float(self._value(data, "interface", "cursor_proximity_threshold")),
+            objects_opacity=float(self._value(data, "interface", "objects_opacity")),
+            color_fill_opacity=float(self._value(data, "interface", "color_fill_opacity")),
+            bbox_handler_size=float(self._value(data, "interface", "bbox_handler_size")),
+            keypoint_handler_size=float(self._value(data, "interface", "keypoint_handler_size")),
+        )
+
+    def _merged_data(self) -> dict[str, Any]:
+        self.ensure_exists()
+        data = read_json(self.path)
+        return self._merge(DEFAULT_SETTINGS, data)
+
+    def _merge(self, default: dict[str, Any], user: dict[str, Any]) -> dict[str, Any]:
+        result = {}
+
+        for key, value in default.items():
+            if isinstance(value, dict) and key in user and isinstance(user[key], dict):
+                result[key] = self._merge(value, user[key])
+            else:
+                result[key] = user.get(key, value)
+
+        return result
+
+    def _value(self, data: dict[str, Any], section: str, name: str) -> Any:
+        item = data[section][name]
+        return item["value"] if isinstance(item, dict) else item

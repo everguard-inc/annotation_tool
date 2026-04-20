@@ -1,29 +1,46 @@
+import sys
+import traceback
+
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QPlainTextEdit, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QTextEdit, QVBoxLayout, QWidget
 
 
 class ErrorDialog(QDialog):
-    def __init__(self, message: str, parent=None) -> None:
+    def __init__(self, message: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Error")
-        self.resize(720, 420)
+        self.resize(900, 600)
 
-        self.text = QPlainTextEdit(self)
+        self.text = QTextEdit(self)
         self.text.setReadOnly(True)
-        self.text.setPlainText(str(message))
-        self.text.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-            | Qt.TextInteractionFlag.TextSelectableByKeyboard
-        )
+        self.text.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.text.setText(message)
 
-        self.close_button = QPushButton("Close", self)
-        self.close_button.clicked.connect(self.accept)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
+        buttons.rejected.connect(self.reject)
+        buttons.accepted.connect(self.accept)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(QLabel("Copy this error and send it to technical support if needed.", self))
         layout.addWidget(self.text)
-        layout.addWidget(self.close_button)
+        layout.addWidget(buttons)
 
-    @classmethod
-    def show_error(cls, message: str, parent=None) -> None:
-        dialog = cls(message, parent)
+    @staticmethod
+    def show_error(message: str, parent: QWidget | None = None) -> None:
+        dialog = ErrorDialog(message, parent)
         dialog.exec()
+
+
+def format_exception(exc_type, exc_value, exc_traceback) -> str:
+    return "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+
+
+def show_unhandled_exception(exc_type, exc_value, exc_traceback, *, critical: bool) -> None:
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    ErrorDialog.show_error(format_exception(exc_type, exc_value, exc_traceback))
+
+    if critical:
+        sys.exit(1)

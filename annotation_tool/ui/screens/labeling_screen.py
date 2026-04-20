@@ -60,10 +60,22 @@ class LabelingScreen(BaseProjectScreen):
         self.refresh(fit=True)
 
     def show_classes(self) -> None:
-        pass
+        from annotation_tool.ui.widgets.classes_html import labels_to_html
+        from annotation_tool.ui.widgets.html_window import HtmlWindow
+
+        html = labels_to_html("Classes", self.session.repository.get_figure_labels())
+        window = HtmlWindow("Classes", parent=self, html_content=html)
+        window.show()
+        self._classes_window = window
 
     def show_review_labels(self) -> None:
-        pass
+        from annotation_tool.ui.widgets.classes_html import labels_to_html
+        from annotation_tool.ui.widgets.html_window import HtmlWindow
+
+        html = labels_to_html("Review Labels", self.session.repository.get_review_labels())
+        window = HtmlWindow("Review Labels", parent=self, html_content=html)
+        window.show()
+        self._review_labels_window = window
 
     def overwrite_annotations(self) -> None:
         pass

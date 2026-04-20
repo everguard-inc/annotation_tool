@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QListWidget, QListWidgetItem, QVBoxLayout
 
 from annotation_tool.core.models import ProjectData
@@ -16,7 +17,7 @@ class ProjectSelectorDialog(QDialog):
             item = QListWidgetItem(
                 f"{project.id} | {project.stage.name} | {project.mode.name} | {project.uid or 'no uid'}"
             )
-            item.setData(256, project)
+            item.setData(Qt.ItemDataRole.UserRole, project)
             self.list_widget.addItem(item)
 
         self.list_widget.itemDoubleClicked.connect(lambda _: self.accept())
@@ -39,4 +40,4 @@ class ProjectSelectorDialog(QDialog):
         item = self.list_widget.currentItem()
         if item is None:
             return None
-        return item.data(256)
+        return item.data(Qt.ItemDataRole.UserRole)

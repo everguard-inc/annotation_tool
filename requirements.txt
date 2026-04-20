@@ -1,9 +1,10 @@
+PySide6
 numpy==1.26.4 
 opencv-python==4.8.1.78
 sqlalchemy
 pillow
 requests
 Jinja2
-tkinterweb
 tqdm
 pynput
+

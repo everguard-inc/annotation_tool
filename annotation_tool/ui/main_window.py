@@ -54,15 +54,14 @@ class MainWindow(QMainWindow):
         self._load_or_request_settings()
 
     def _load_or_request_settings(self) -> None:
-        try:
-            if self.settings_store.has_empty_required_values():
-                self.open_settings()
+        if self.settings_store.has_empty_required_values():
+            accepted = self.open_required_settings()
+            if not accepted:
+                QApplication.quit()
+                return
 
-            self.settings = self.settings_store.load()
-            self._build_services()
-        except UserVisibleError as error:
-            ErrorDialog.show_error(str(error), self)
-            self.open_settings()
+        self.settings = self.settings_store.load()
+        self._build_services()
 
     def _build_services(self) -> None:
         if self.settings is None:
@@ -233,19 +232,31 @@ class MainWindow(QMainWindow):
             ErrorDialog.show_error(str(error), self)
 
     def open_settings(self) -> None:
-        try:
-            current_settings = self._safe_settings_for_dialog()
-            dialog = SettingsDialog(current_settings, self)
+        current_settings = self._safe_settings_for_dialog()
+        dialog = SettingsDialog(current_settings, self)
 
-            if dialog.exec() != SettingsDialog.DialogCode.Accepted:
-                return
+        if dialog.exec() != SettingsDialog.DialogCode.Accepted:
+            return
 
-            self.settings_store.save(dialog.settings())
-            self.settings = self.settings_store.load()
-            self._build_services()
-            self.statusBar().showMessage("Settings saved", 3000)
-        except UserVisibleError as error:
-            ErrorDialog.show_error(str(error), self)
+        self.settings_store.save(dialog.settings())
+        self.settings = self.settings_store.load()
+        self._build_services()
+        self.statusBar().showMessage("Settings saved", 3000)
+
+    def open_required_settings(self) -> bool:
+        missing = self.settings_store.missing_required_values()
+        dialog = SettingsDialog(
+            self.settings_store.draft_settings(),
+            self,
+            required_mode=True,
+            missing_fields=missing,
+        )
+
+        if dialog.exec() != SettingsDialog.DialogCode.Accepted:
+            return False
+
+        self.settings_store.save(dialog.settings())
+        return True
 
     def update_tool(self) -> None:
         agree = QMessageBox.question(
@@ -258,23 +269,81 @@ class MainWindow(QMainWindow):
             return
 
         root_path = Path(__file__).resolve().parents[2]
-        result = subprocess.run(
+        python_path = root_path / "venv" / "bin" / "python"
+
+        if not python_path.exists():
+            python_path = Path(sys.executable)
+
+        commands = [
             ["git", "-C", str(root_path), "pull"],
-            capture_output=True,
-            text=True,
+            [str(python_path), "-m", "pip", "install", "--upgrade", "pip"],
+            [str(python_path), "-m", "pip", "install", "-r", str(root_path / "requirements.txt")],
+        ]
+
+        output_parts = []
+
+        for command in commands:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+            )
+
+            output_parts.append(f"$ {' '.join(command)}")
+            output_parts.append(result.stdout.strip())
+            output_parts.append(result.stderr.strip())
+
+            if result.returncode != 0:
+                message = "\n".join(part for part in output_parts if part)
+                raise RuntimeError(f"Update failed.\n\n{message}")
+
+        self._refresh_desktop_shortcut(root_path, python_path)
+
+        message = "\n".join(part for part in output_parts if part)
+        message += "\n\nSuccess\n\nRe-open the tool from the desktop shortcut for the changes to take effect."
+
+        QMessageBox.information(self, "Update result", message)
+
+    def _refresh_desktop_shortcut(self, root_path: Path, python_path: Path) -> None:
+        desktop_path = Path.home() / "Desktop"
+        if not desktop_path.exists():
+            return
+
+        desktop_file = desktop_path / "Labeling.desktop"
+        icon_path = root_path / "icon.png"
+
+        desktop_file.write_text(
+            "\n".join(
+                [
+                    "[Desktop Entry]",
+                    "Version=1.0",
+                    "Type=Application",
+                    "Name=EG Labeling",
+                    f"Exec=bash -c 'cd \"{root_path}\" && \"{python_path}\" -m annotation_tool'",
+                    f"Icon={icon_path}",
+                    "Terminal=false",
+                    "StartupNotify=true",
+                    "Categories=Utility;",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
         )
-
-        message = f"{result.stdout}\n{result.stderr}".strip()
-        if "Updating" in message or "Fast-forward" in message:
-            message += "\n\nSuccess\n\nRe-open the tool for the changes to take effect."
-
-        QMessageBox.information(self, "Update result", message or "No output from git pull.")
+        desktop_file.chmod(0o755)
 
     def show_help(self) -> None:
         self._show_html_window("How to use this tool?", "how.html")
 
     def show_hotkeys(self) -> None:
         self._show_html_window("Hotkeys", "hotkeys.html")
+
+    def show_classes(self) -> None:
+        if self.current_screen is not None and hasattr(self.current_screen, "show_classes"):
+            self.current_screen.show_classes()
+
+    def show_review_labels(self) -> None:
+        if self.current_screen is not None and hasattr(self.current_screen, "show_review_labels"):
+            self.current_screen.show_review_labels()
 
     def closeEvent(self, event) -> None:
         if self.current_screen is not None:
@@ -294,37 +363,34 @@ class MainWindow(QMainWindow):
 
         self.current_project = project
 
-        try:
-            from annotation_tool.core.enums import AnnotationMode
-            from annotation_tool.infrastructure.repositories.filtering_repository import FilteringRepository
-            from annotation_tool.infrastructure.repositories.labeling_repository import LabelingRepository
-            from annotation_tool.media.video_frame_provider import VideoFrameProvider
-            from annotation_tool.services.filtering_session import FilteringSession
-            from annotation_tool.services.labeling_session import LabelingSession
-            from annotation_tool.ui.screens.filtering_screen import FilteringScreen
-            from annotation_tool.ui.screens.labeling_screen import LabelingScreen
+        from annotation_tool.core.enums import AnnotationMode
+        from annotation_tool.infrastructure.repositories.filtering_repository import FilteringRepository
+        from annotation_tool.infrastructure.repositories.labeling_repository import LabelingRepository
+        from annotation_tool.media.video_frame_provider import VideoFrameProvider
+        from annotation_tool.services.filtering_session import FilteringSession
+        from annotation_tool.services.labeling_session import LabelingSession
+        from annotation_tool.ui.screens.filtering_screen import FilteringScreen
+        from annotation_tool.ui.screens.labeling_screen import LabelingScreen
 
-            if self.settings is not None and project.mode in {
-                AnnotationMode.OBJECT_DETECTION,
-                AnnotationMode.SEGMENTATION,
-                AnnotationMode.KEYPOINTS,
-            }:
-                repository = LabelingRepository(self.settings.data_dir, project.id)
-                session = LabelingSession(project, repository)
-                self.current_screen = LabelingScreen(session, self)
+        if self.settings is not None and project.mode in {
+            AnnotationMode.OBJECT_DETECTION,
+            AnnotationMode.SEGMENTATION,
+            AnnotationMode.KEYPOINTS,
+        }:
+            repository = LabelingRepository(self.settings.data_dir, project.id)
+            session = LabelingSession(project, repository)
+            self.current_screen = LabelingScreen(session, self)
 
-            elif self.settings is not None and project.mode is AnnotationMode.FILTERING:
-                from annotation_tool.core.paths import FilteringPaths
+        elif self.settings is not None and project.mode is AnnotationMode.FILTERING:
+            from annotation_tool.core.paths import FilteringPaths
 
-                paths = FilteringPaths(self.settings.data_dir, project.id)
-                repository = FilteringRepository(self.settings.data_dir, project.id)
-                frame_provider = VideoFrameProvider(paths.video_path)
-                session = FilteringSession(frame_provider, repository)
-                self.current_screen = FilteringScreen(session, paths.selected_frames_path, self)
+            paths = FilteringPaths(self.settings.data_dir, project.id)
+            repository = FilteringRepository(self.settings.data_dir, project.id)
+            frame_provider = VideoFrameProvider(paths.video_path)
+            session = FilteringSession(frame_provider, repository)
+            self.current_screen = FilteringScreen(session, paths.selected_frames_path, self)
 
-            else:
-                self.current_screen = ProjectPlaceholderScreen(project, self)
-        except Exception:
+        else:
             self.current_screen = ProjectPlaceholderScreen(project, self)
 
         self.setCentralWidget(self.current_screen)
@@ -346,21 +412,7 @@ class MainWindow(QMainWindow):
         if self.settings is not None:
             return self.settings
 
-        try:
-            return self.settings_store.load()
-        except UserVisibleError:
-            return AppSettings(
-                token="",
-                api_url="",
-                file_url="",
-                data_dir=Path.home() / "annotation",
-                bbox_line_width=3.0,
-                cursor_proximity_threshold=3.0,
-                objects_opacity=0.9,
-                color_fill_opacity=0.1,
-                bbox_handler_size=3.0,
-                keypoint_handler_size=5.0,
-            )
+        return self.settings_store.draft_settings()
 
     def _show_html_window(self, title: str, file_name: str) -> None:
         html_path = Path(__file__).resolve().parents[2] / "templates" / file_name
@@ -376,7 +428,11 @@ class MainWindow(QMainWindow):
 
 
 def run_app() -> None:
-    app = QApplication(sys.argv)
+    from annotation_tool.ui.exception_hook import ErrorAwareApplication, install_exception_hooks
+
+    install_exception_hooks()
+
+    app = ErrorAwareApplication(sys.argv)
 
     settings_path = Path(__file__).resolve().parents[2] / "settings.json"
     window = MainWindow(SettingsStore(settings_path))

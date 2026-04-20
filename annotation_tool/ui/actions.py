@@ -21,6 +21,8 @@ class AppActions:
 
         self.help_action = QAction("How to use this tool?", self.window)
         self.hotkeys_action = QAction("Hotkeys", self.window)
+        self.classes_action = QAction("Classes", self.window)
+        self.review_labels_action = QAction("Review Labels", self.window)
 
         self.open_action.triggered.connect(self.window.open_project)
         self.download_action.triggered.connect(self.window.download_project)
@@ -32,6 +34,8 @@ class AppActions:
         self.overwrite_action.triggered.connect(self.window.overwrite_annotations)
         self.help_action.triggered.connect(self.window.show_help)
         self.hotkeys_action.triggered.connect(self.window.show_hotkeys)
+        self.classes_action.triggered.connect(self.window.show_classes)
+        self.review_labels_action.triggered.connect(self.window.show_review_labels)
 
     def bind_menu(self) -> None:
         menu = self.window.menuBar()
@@ -50,6 +54,9 @@ class AppActions:
         self.help_menu = menu.addMenu("Help")
         self.help_menu.addAction(self.help_action)
         self.help_menu.addAction(self.hotkeys_action)
+        self.help_menu.addSeparator()
+        self.help_menu.addAction(self.classes_action)
+        self.help_menu.addAction(self.review_labels_action)
 
         self.set_project_opened(False)
 
@@ -58,3 +65,5 @@ class AppActions:
         self.go_to_id_action.setEnabled(opened)
         self.complete_action.setEnabled(opened)
         self.overwrite_action.setEnabled(opened)
+        self.classes_action.setEnabled(opened)
+        self.review_labels_action.setEnabled(opened)
