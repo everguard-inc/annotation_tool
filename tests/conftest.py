@@ -4,10 +4,13 @@ import sys
 from pathlib import Path
 
 import pytest
+from PIL import Image
 from PySide6.QtWidgets import QApplication
 
 from annotation_tool.core.enums import AnnotationMode, AnnotationStage
 from annotation_tool.core.models import ProjectData
+from annotation_tool.core.paths import LabelingPaths
+from annotation_tool.core.utils import write_json
 
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -84,3 +87,61 @@ def filtering_project() -> ProjectData:
         stage=AnnotationStage.FILTERING,
         mode=AnnotationMode.FILTERING,
     )
+
+
+@pytest.fixture
+def labeling_cache(data_dir: Path, labeling_project: ProjectData) -> LabelingPaths:
+    paths = LabelingPaths(data_dir, labeling_project.id)
+    paths.ensure_project_dir()
+    paths.images_dir.mkdir(parents=True, exist_ok=True)
+
+    image_a = Image.new("RGB", (20, 10), color=(255, 255, 255))
+    for x in range(10):
+        for y in range(10):
+            image_a.putpixel((x, y), (255, 0, 0))
+    image_a.save(paths.images_dir / "a.jpg")
+
+    image_b = Image.new("RGB", (20, 10), color=(255, 255, 255))
+    for x in range(10, 20):
+        for y in range(10):
+            image_b.putpixel((x, y), (0, 0, 255))
+    image_b.save(paths.images_dir / "b.jpg")
+
+    write_json(
+        paths.cache_path,
+        {
+            "labels": [
+                {"name": "truck", "color": "blue", "hotkey": "2", "type": "BBOX"},
+                {"name": "car", "color": "red", "hotkey": "1", "type": "BBOX"},
+                {"name": "blur", "color": "gray", "hotkey": "0", "type": "BBOX"},
+            ],
+            "review_labels": [
+                {"name": "Fix", "color": "yellow", "hotkey": "1", "type": "REVIEW_LABEL"}
+            ],
+            "items": [
+                {"name": "b.jpg", "width": 20, "height": 10, "requires_annotation": True},
+                {"name": "a.jpg", "width": 20, "height": 10, "requires_annotation": True},
+            ],
+            "figures": {
+                "a.jpg": {
+                    "trash": False,
+                    "bboxes": [{"x1": 2, "y1": 2, "x2": 8, "y2": 7, "label": "car"}],
+                    "masks": {},
+                    "kgroups": [],
+                    "height": 10,
+                    "width": 20,
+                },
+                "b.jpg": {
+                    "trash": False,
+                    "bboxes": [],
+                    "masks": {},
+                    "kgroups": [],
+                    "height": 10,
+                    "width": 20,
+                },
+            },
+            "review": {},
+        },
+    )
+
+    return paths

@@ -1,30 +1,23 @@
-from abc import ABC, abstractmethod
-
 from PySide6.QtWidgets import QWidget
 
 
 class BaseProjectScreen(QWidget):
     @property
-    @abstractmethod
     def items_count(self) -> int:
-        ...
+        raise NotImplementedError
 
     @property
-    @abstractmethod
     def duration_hours(self) -> float:
-        ...
+        raise NotImplementedError
 
-    @abstractmethod
     def save(self) -> None:
-        ...
+        raise NotImplementedError
 
-    @abstractmethod
     def close_screen(self) -> None:
-        ...
+        raise NotImplementedError
 
-    @abstractmethod
     def go_to_id(self, item_id: int) -> None:
-        ...
+        raise NotImplementedError
 
     def export_results(self) -> list:
         return []

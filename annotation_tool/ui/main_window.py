@@ -293,7 +293,26 @@ class MainWindow(QMainWindow):
             self.current_screen.deleteLater()
 
         self.current_project = project
-        self.current_screen = ProjectPlaceholderScreen(project, self)
+
+        try:
+            from annotation_tool.core.enums import AnnotationMode
+            from annotation_tool.infrastructure.repositories.labeling_repository import LabelingRepository
+            from annotation_tool.services.labeling_session import LabelingSession
+            from annotation_tool.ui.screens.labeling_screen import LabelingScreen
+
+            if self.settings is not None and project.mode in {
+                AnnotationMode.OBJECT_DETECTION,
+                AnnotationMode.SEGMENTATION,
+                AnnotationMode.KEYPOINTS,
+            }:
+                repository = LabelingRepository(self.settings.data_dir, project.id)
+                session = LabelingSession(project, repository)
+                self.current_screen = LabelingScreen(session, self)
+            else:
+                self.current_screen = ProjectPlaceholderScreen(project, self)
+        except Exception:
+            self.current_screen = ProjectPlaceholderScreen(project, self)
+
         self.setCentralWidget(self.current_screen)
         self.set_current_project_title(project.id)
 
