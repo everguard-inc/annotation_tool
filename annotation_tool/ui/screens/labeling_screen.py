@@ -44,12 +44,9 @@ class LabelingScreen(BaseProjectScreen):
         return self.session.duration_hours
 
     def refresh(self, fit: bool = False) -> None:
-        frame = self.session.render_frame()
-        self.canvas.set_image(numpy_to_qimage(frame))
-
+        self.canvas.set_image(numpy_to_qimage(self.session.render_frame()))
         if fit:
             self.canvas.fit_image()
-
         self.status_bar.update_status(self.session.status())
 
     def save(self) -> None:
@@ -79,18 +76,22 @@ class LabelingScreen(BaseProjectScreen):
 
     def handle_mouse_press(self, x: int, y: int) -> None:
         self.session.set_cursor(x, y)
+        self.session.handle_mouse_press(x, y)
         self.refresh()
 
     def handle_mouse_move(self, x: int, y: int) -> None:
         self.session.set_cursor(x, y)
+        self.session.handle_mouse_move(x, y)
         self.refresh()
 
     def handle_mouse_release(self, x: int, y: int) -> None:
         self.session.set_cursor(x, y)
+        self.session.handle_mouse_release(x, y)
         self.refresh()
 
     def handle_mouse_hover(self, x: int, y: int) -> None:
         self.session.set_cursor(x, y)
+        self.session.handle_mouse_hover(x, y)
         self.refresh()
 
     def handle_key_press(self, key: str) -> None:
@@ -118,11 +119,18 @@ class LabelingScreen(BaseProjectScreen):
             self.session.set_shift_mode(True)
             return
 
-        if key == "a":
+        if key == "space":
+            self.session.finish_polygon()
+        elif key == "escape":
+            self.session.cancel_polygon()
+        elif key == "a":
             self.class_wheel.open_at(QPoint(self.session.cursor_x, self.session.cursor_y), self.session.labels())
             return
-
-        if key == "t":
+        elif key == "d":
+            self.session.delete_selected()
+        elif key == "g":
+            self.session.delete_all()
+        elif key == "t":
             self.session.toggle_trash()
         elif key == "e":
             self.session.toggle_figures_visibility()
@@ -136,6 +144,14 @@ class LabelingScreen(BaseProjectScreen):
             self.session.toggle_degraded_preview()
         elif key == "u":
             self.session.copy_from_previous_item()
+        elif key == "ctrl+z":
+            self.session.undo()
+        elif key == "ctrl+y":
+            self.session.redo()
+        elif key == "ctrl+c":
+            self.session.copy()
+        elif key == "ctrl+v":
+            self.session.paste()
         elif key.isdigit():
             self.session.set_active_label_by_hotkey(key)
 

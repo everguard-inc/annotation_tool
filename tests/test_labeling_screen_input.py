@@ -28,7 +28,7 @@ def test_keyboard_and_mouse_events_update_session_state(qapp, data_dir: Path, la
     assert session.current_item_id() == 0
 
     screen.handle_key_press("shift")
-    assert session.shift_mode is True
+    assert session.controller.shift_mode is True
 
     screen.handle_key_release("shift")
-    assert session.shift_mode is False
+    assert session.controller.shift_mode is False

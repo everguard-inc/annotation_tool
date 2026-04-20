@@ -11,11 +11,12 @@ class Point:
     label: str | None = None
 
     def close_to(self, x: int, y: int, distance: float) -> bool:
-        ...
+        return abs(self.x - x) <= distance and abs(self.y - y) <= distance
 
 
 class Figure(ABC):
-    selected: bool
+    selected: bool = False
+    active_point_id: int | None = None
 
     @property
     @abstractmethod
@@ -28,7 +29,7 @@ class Figure(ABC):
         ...
 
     @abstractmethod
-    def draw(self, frame: np.ndarray, scale_factor: float) -> np.ndarray:
+    def draw(self, frame: np.ndarray, scale_factor: float, labels: dict | None = None) -> np.ndarray:
         ...
 
     @abstractmethod
@@ -36,7 +37,7 @@ class Figure(ABC):
         ...
 
     @abstractmethod
-    def find_nearest_point_index(self, x: int, y: int) -> int | None:
+    def find_nearest_point_index(self, x: int, y: int, distance: float = 5) -> int | None:
         ...
 
     @abstractmethod

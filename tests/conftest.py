@@ -30,6 +30,21 @@ def qapp():
 def data_dir(tmp_path: Path) -> Path:
     return tmp_path / "annotation-data"
 
+def create_pattern_image(path: Path, size: tuple[int, int], base: tuple[int, int, int]) -> None:
+    image = Image.new("RGB", size, color=base)
+    width, height = size
+
+    for x in range(width):
+        for y in range(height):
+            if (x // 4) % 2 == 0:
+                image.putpixel((x, y), (255, 0, 0))
+            elif (y // 3) % 2 == 0:
+                image.putpixel((x, y), (0, 255, 0))
+            else:
+                image.putpixel((x, y), (0, 0, 255))
+
+    image.save(path)
+
 
 @pytest.fixture
 def valid_settings_file(tmp_path: Path) -> Path:
@@ -97,17 +112,8 @@ def labeling_cache(data_dir: Path, labeling_project: ProjectData) -> LabelingPat
     paths.ensure_project_dir()
     paths.images_dir.mkdir(parents=True, exist_ok=True)
 
-    image_a = Image.new("RGB", (20, 10), color=(255, 255, 255))
-    for x in range(10):
-        for y in range(10):
-            image_a.putpixel((x, y), (255, 0, 0))
-    image_a.save(paths.images_dir / "a.jpg")
-
-    image_b = Image.new("RGB", (20, 10), color=(255, 255, 255))
-    for x in range(10, 20):
-        for y in range(10):
-            image_b.putpixel((x, y), (0, 0, 255))
-    image_b.save(paths.images_dir / "b.jpg")
+    create_pattern_image(paths.images_dir / "a.jpg", size=(20, 10), base=(255, 255, 255))
+    create_pattern_image(paths.images_dir / "b.jpg", size=(20, 10), base=(220, 220, 220))
 
     write_json(
         paths.cache_path,
@@ -168,9 +174,134 @@ def filtering_video_path(filtering_paths: FilteringPaths) -> Path:
     )
 
     assert writer.isOpened()
+    
     for index in range(4):
-        frame = np.full((24, 32, 3), index * 50, dtype=np.uint8)
+        frame = np.zeros((24, 32, 3), dtype=np.uint8)
+        frame[:, :] = index * 40
+
+        for x in range(32):
+            if (x // 4) % 2 == 0:
+                frame[:, x] = (0, 0, 255)
+            else:
+                frame[:, x] = (0, 255, 0)
+
+        cv2.putText(
+            frame,
+            str(index),
+            (8, 16),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (255, 255, 255),
+            1,
+        )
         writer.write(frame)
 
     writer.release()
     return video_path
+
+
+@pytest.fixture
+def object_project() -> ProjectData:
+    return ProjectData(
+        id=10,
+        uid="uid-10",
+        stage=AnnotationStage.ANNOTATE,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+
+
+@pytest.fixture
+def review_project() -> ProjectData:
+    return ProjectData(
+        id=10,
+        uid="uid-10",
+        stage=AnnotationStage.REVIEW,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+
+
+@pytest.fixture
+def correction_project() -> ProjectData:
+    return ProjectData(
+        id=10,
+        uid="uid-10",
+        stage=AnnotationStage.CORRECTION,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+
+
+@pytest.fixture
+def keypoints_project() -> ProjectData:
+    return ProjectData(
+        id=10,
+        uid="uid-10",
+        stage=AnnotationStage.ANNOTATE,
+        mode=AnnotationMode.KEYPOINTS,
+    )
+
+
+@pytest.fixture
+def segmentation_project() -> ProjectData:
+    return ProjectData(
+        id=10,
+        uid="uid-10",
+        stage=AnnotationStage.ANNOTATE,
+        mode=AnnotationMode.SEGMENTATION,
+    )
+
+
+@pytest.fixture
+def rich_labeling_cache(data_dir: Path) -> LabelingPaths:
+    paths = LabelingPaths(data_dir, 10)
+    paths.ensure_project_dir()
+    paths.images_dir.mkdir(parents=True, exist_ok=True)
+
+    create_pattern_image(paths.images_dir / "a.jpg", size=(40, 30), base=(255, 255, 255))
+    create_pattern_image(paths.images_dir / "b.jpg", size=(40, 30), base=(220, 220, 220))
+    create_pattern_image(paths.images_dir / "c.jpg", size=(40, 30), base=(200, 200, 200))
+
+    write_json(
+        paths.cache_path,
+        {
+            "labels": [
+                {"name": "car", "color": "red", "hotkey": "1", "type": "BBOX"},
+                {
+                    "name": "pose",
+                    "color": "blue",
+                    "hotkey": "2",
+                    "type": "KGROUP",
+                    "attributes": {
+                        "keypoint_info": {
+                            "head": {"x": 0.5, "y": 0.0, "color": "yellow"},
+                            "tail": {"x": 0.5, "y": 1.0, "color": "cyan"},
+                        },
+                        "keypoint_connections": [
+                            {"from": "head", "to": "tail", "color": "white"}
+                        ],
+                    },
+                },
+                {"name": "road", "color": "green", "hotkey": "3", "type": "MASK"},
+                {"name": "truck", "color": "blue", "hotkey": "4", "type": "BBOX"},
+            ],
+            "review_labels": [
+                {"name": "Fix object", "color": "yellow", "hotkey": "1", "type": "REVIEW_LABEL"}
+            ],
+            "items": [
+                {"name": "a.jpg", "width": 40, "height": 30, "requires_annotation": True},
+                {"name": "b.jpg", "width": 40, "height": 30, "requires_annotation": False},
+                {"name": "c.jpg", "width": 40, "height": 30, "requires_annotation": True},
+            ],
+            "figures": {
+                "a.jpg": {"trash": False, "bboxes": [], "kgroups": [], "masks": {}, "height": 30, "width": 40},
+                "b.jpg": {"trash": False, "bboxes": [], "kgroups": [], "masks": {}, "height": 30, "width": 40},
+                "c.jpg": {"trash": False, "bboxes": [], "kgroups": [], "masks": {}, "height": 30, "width": 40},
+            },
+            "review": {
+                "a.jpg": [],
+                "b.jpg": [{"label": "Fix object", "x": 5, "y": 6}],
+                "c.jpg": [{"label": "Fix object", "x": 7, "y": 8}],
+            },
+        },
+    )
+
+    return paths
