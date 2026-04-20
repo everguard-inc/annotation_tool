@@ -8,3 +8,5 @@ settings.json
 *.txt
 message_to_code.py
 .gitignore
+prompting
+collect.py

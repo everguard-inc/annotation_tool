@@ -1,22 +1,22 @@
 class AnnotationToolError(Exception):
-    ...
+    pass
 
 
 class UserVisibleError(AnnotationToolError):
-    ...
+    pass
 
 
-class SettingsError(AnnotationToolError):
-    ...
+class SettingsError(UserVisibleError):
+    pass
 
 
-class ProjectError(AnnotationToolError):
-    ...
+class ProjectError(UserVisibleError):
+    pass
 
 
-class BackendError(AnnotationToolError):
-    ...
+class BackendError(UserVisibleError):
+    pass
 
 
-class ValidationError(AnnotationToolError):
-    ...
+class ValidationError(UserVisibleError):
+    pass

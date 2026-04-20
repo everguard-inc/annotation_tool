@@ -13,10 +13,23 @@ class ProjectData:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "ProjectData":
-        ...
+        stage_name = data.get("annotation_stage") or data.get("stage")
+        mode_name = data.get("annotation_mode") or data.get("mode")
+
+        return cls(
+            id=int(data["id"]),
+            uid=data.get("uid"),
+            stage=AnnotationStage[stage_name],
+            mode=AnnotationMode[mode_name],
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        ...
+        return {
+            "id": self.id,
+            "uid": self.uid,
+            "annotation_stage": self.stage.name,
+            "annotation_mode": self.mode.name,
+        }
 
 
 @dataclass
