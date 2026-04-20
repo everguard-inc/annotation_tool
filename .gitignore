@@ -6,3 +6,5 @@ venv
 trash
 settings.json
 *.txt
+message_to_code.py
+.gitignore

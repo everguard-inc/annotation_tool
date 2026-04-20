@@ -1,0 +1,36 @@
+from enum import Enum
+
+
+class AnnotationStage(Enum):
+    UNKNOWN = "UNKNOWN"
+    ANNOTATE = "ANNOTATE"
+    SENT_FOR_REVIEW = "SENT_FOR_REVIEW"
+    REVIEW = "REVIEW"
+    CORRECTION = "CORRECTION"
+    SENT_FOR_CORRECTION = "SENT_FOR_CORRECTION"
+    DONE = "DONE"
+    FILTERING = "FILTERING"
+    EVENT_VALIDATION = "EVENT_VALIDATION"
+
+
+class AnnotationMode(Enum):
+    UNKNOWN = "UNKNOWN"
+    OBJECT_DETECTION = "OBJECT_DETECTION"
+    SEGMENTATION = "SEGMENTATION"
+    KEYPOINTS = "KEYPOINTS"
+    FILTERING = "FILTERING"
+    EVENT_VALIDATION = "EVENT_VALIDATION"
+
+
+class FigureType(Enum):
+    BBOX = "BBOX"
+    MASK = "MASK"
+    KGROUP = "KGROUP"
+    REVIEW_LABEL = "REVIEW_LABEL"
+
+
+class FilteringDelay(Enum):
+    NO_DELAY = 0
+    SHORT = 0.01
+    MIDDLE = 0.1
+    LONG = 0.25

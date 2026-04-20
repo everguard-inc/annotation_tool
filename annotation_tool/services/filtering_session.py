@@ -1,0 +1,43 @@
+from annotation_tool.core.enums import FilteringDelay
+from annotation_tool.core.models import FilteringStatusData
+
+
+class FilteringSession:
+    def item_count(self) -> int:
+        ...
+
+    def current_item_id(self) -> int:
+        ...
+
+    def status(self) -> FilteringStatusData:
+        ...
+
+    def go_to_item(self, item_id: int) -> None:
+        ...
+
+    def next_item(self) -> None:
+        ...
+
+    def previous_item(self) -> None:
+        ...
+
+    def toggle_selected(self) -> None:
+        ...
+
+    def go_to_next_selected(self) -> None:
+        ...
+
+    def go_to_previous_selected(self) -> None:
+        ...
+
+    def set_delay(self, delay: FilteringDelay) -> None:
+        ...
+
+    def toggle_degraded_preview(self) -> None:
+        ...
+
+    def save_current_item(self) -> None:
+        ...
+
+    def close(self) -> None:
+        ...
