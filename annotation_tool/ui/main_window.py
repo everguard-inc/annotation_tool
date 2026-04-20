@@ -296,8 +296,12 @@ class MainWindow(QMainWindow):
 
         try:
             from annotation_tool.core.enums import AnnotationMode
+            from annotation_tool.infrastructure.repositories.filtering_repository import FilteringRepository
             from annotation_tool.infrastructure.repositories.labeling_repository import LabelingRepository
+            from annotation_tool.media.video_frame_provider import VideoFrameProvider
+            from annotation_tool.services.filtering_session import FilteringSession
             from annotation_tool.services.labeling_session import LabelingSession
+            from annotation_tool.ui.screens.filtering_screen import FilteringScreen
             from annotation_tool.ui.screens.labeling_screen import LabelingScreen
 
             if self.settings is not None and project.mode in {
@@ -308,6 +312,16 @@ class MainWindow(QMainWindow):
                 repository = LabelingRepository(self.settings.data_dir, project.id)
                 session = LabelingSession(project, repository)
                 self.current_screen = LabelingScreen(session, self)
+
+            elif self.settings is not None and project.mode is AnnotationMode.FILTERING:
+                from annotation_tool.core.paths import FilteringPaths
+
+                paths = FilteringPaths(self.settings.data_dir, project.id)
+                repository = FilteringRepository(self.settings.data_dir, project.id)
+                frame_provider = VideoFrameProvider(paths.video_path)
+                session = FilteringSession(frame_provider, repository)
+                self.current_screen = FilteringScreen(session, paths.selected_frames_path, self)
+
             else:
                 self.current_screen = ProjectPlaceholderScreen(project, self)
         except Exception:

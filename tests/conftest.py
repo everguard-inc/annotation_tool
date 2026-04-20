@@ -3,13 +3,15 @@ import os
 import sys
 from pathlib import Path
 
+import cv2
+import numpy as np
 import pytest
 from PIL import Image
 from PySide6.QtWidgets import QApplication
 
 from annotation_tool.core.enums import AnnotationMode, AnnotationStage
 from annotation_tool.core.models import ProjectData
-from annotation_tool.core.paths import LabelingPaths
+from annotation_tool.core.paths import FilteringPaths, LabelingPaths
 from annotation_tool.core.utils import write_json
 
 
@@ -145,3 +147,30 @@ def labeling_cache(data_dir: Path, labeling_project: ProjectData) -> LabelingPat
     )
 
     return paths
+
+
+@pytest.fixture
+def filtering_paths(data_dir: Path, filtering_project: ProjectData) -> FilteringPaths:
+    paths = FilteringPaths(data_dir, filtering_project.id)
+    paths.ensure_project_dir()
+    write_json(paths.cache_path, {"labels": [], "review_labels": [], "items": []})
+    return paths
+
+
+@pytest.fixture
+def filtering_video_path(filtering_paths: FilteringPaths) -> Path:
+    video_path = filtering_paths.video_path
+    writer = cv2.VideoWriter(
+        str(video_path),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        10,
+        (32, 24),
+    )
+
+    assert writer.isOpened()
+    for index in range(4):
+        frame = np.full((24, 32, 3), index * 50, dtype=np.uint8)
+        writer.write(frame)
+
+    writer.release()
+    return video_path

@@ -115,7 +115,7 @@ class ImportExportService:
         cache = self._read_cache(paths.cache_path)
 
         result = {"names": [], "ids": []}
-        for item in cache.get("items", []):
+        for item in sorted(cache.get("items", []), key=lambda value: value.get("item_id", 0)):
             if not item.get("selected"):
                 continue
 
