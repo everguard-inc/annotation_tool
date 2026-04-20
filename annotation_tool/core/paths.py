@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from annotation_tool.core.utils import now_string
+
 
 class ProjectPaths:
     def __init__(self, data_dir: Path, project_id: int) -> None:
@@ -24,11 +26,19 @@ class ProjectPaths:
         return self.project_dir / "meta.json"
 
     @property
+    def cache_path(self) -> Path:
+        return self.project_dir / "cache.json"
+
+    @property
+    def runtime_state_path(self) -> Path:
+        return self.project_dir / "runtime_state.json"
+
+    @property
     def statistics_path(self) -> Path:
         existing = sorted(self.project_dir.glob("*statistics*.txt"))
         if existing:
             return existing[0]
-        return self.project_dir / "statistics.txt"
+        return self.project_dir / f"statistics_{now_string()}.txt"
 
     def ensure_project_dir(self) -> None:
         self.project_dir.mkdir(parents=True, exist_ok=True)

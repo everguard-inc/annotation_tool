@@ -22,6 +22,11 @@ def qapp():
 
 
 @pytest.fixture
+def data_dir(tmp_path: Path) -> Path:
+    return tmp_path / "annotation-data"
+
+
+@pytest.fixture
 def valid_settings_file(tmp_path: Path) -> Path:
     data_dir = tmp_path / "annotation-data"
     settings_path = tmp_path / "settings.json"
@@ -58,4 +63,24 @@ def sample_project() -> ProjectData:
         uid="project-uid-7",
         stage=AnnotationStage.ANNOTATE,
         mode=AnnotationMode.OBJECT_DETECTION,
+    )
+
+
+@pytest.fixture
+def labeling_project() -> ProjectData:
+    return ProjectData(
+        id=7,
+        uid="uid-7",
+        stage=AnnotationStage.ANNOTATE,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+
+
+@pytest.fixture
+def filtering_project() -> ProjectData:
+    return ProjectData(
+        id=8,
+        uid="uid-8",
+        stage=AnnotationStage.FILTERING,
+        mode=AnnotationMode.FILTERING,
     )

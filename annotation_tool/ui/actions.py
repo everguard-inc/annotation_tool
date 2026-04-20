@@ -17,6 +17,7 @@ class AppActions:
         self.remove_action = QAction("Remove project by ID", self.window)
         self.go_to_id_action = QAction("Go to ID", self.window)
         self.complete_action = QAction("Complete the project", self.window)
+        self.overwrite_action = QAction("Download and overwrite annotations", self.window)
 
         self.help_action = QAction("How to use this tool?", self.window)
         self.hotkeys_action = QAction("Hotkeys", self.window)
@@ -28,6 +29,7 @@ class AppActions:
         self.remove_action.triggered.connect(self.window.remove_project)
         self.go_to_id_action.triggered.connect(self.window.go_to_id)
         self.complete_action.triggered.connect(self.window.complete_project)
+        self.overwrite_action.triggered.connect(self.window.overwrite_annotations)
         self.help_action.triggered.connect(self.window.show_help)
         self.hotkeys_action.triggered.connect(self.window.show_hotkeys)
 
@@ -43,6 +45,7 @@ class AppActions:
         self.project_menu.addSeparator()
         self.project_menu.addAction(self.go_to_id_action)
         self.project_menu.addAction(self.complete_action)
+        self.project_menu.addAction(self.overwrite_action)
 
         self.help_menu = menu.addMenu("Help")
         self.help_menu.addAction(self.help_action)
@@ -54,3 +57,4 @@ class AppActions:
         self.project_opened = opened
         self.go_to_id_action.setEnabled(opened)
         self.complete_action.setEnabled(opened)
+        self.overwrite_action.setEnabled(opened)

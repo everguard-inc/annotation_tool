@@ -38,3 +38,9 @@ class ProjectPlaceholderScreen(BaseProjectScreen):
 
     def go_to_id(self, item_id: int) -> None:
         self.current_item_id = max(0, min(item_id, self.items_count - 1))
+
+    def export_results(self) -> list:
+        return []
+
+    def should_remove_after_completion(self) -> bool:
+        return False

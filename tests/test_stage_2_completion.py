@@ -21,6 +21,14 @@ class CompletionApi:
         self.completed.append((project_uid, duration_hours))
 
 
+class FakeFileTransfer:
+    def __init__(self) -> None:
+        self.uploaded: list[tuple[str, Path]] = []
+
+    def upload(self, uid: str, file_path: Path) -> None:
+        self.uploaded.append((uid, file_path))
+
+
 @pytest.mark.parametrize(
     ("initial_stage", "expected_stage"),
     [
@@ -48,12 +56,13 @@ def test_completion_service_changes_stage_and_calls_backend(
     exported_file = tmp_path / "result.json"
     exported_file.write_text("{}", encoding="utf-8")
 
-    uploaded: list[tuple[str, Path]] = []
     api = CompletionApi(available=True)
+    file_transfer = FakeFileTransfer()
+
     service = CompletionService(
-        api,
-        repository,
-        upload_file=lambda uid, path: uploaded.append((uid, path)),
+        api_client=api,
+        project_repository=repository,
+        file_transfer=file_transfer,
     )
 
     completed = service.complete_current_project(
@@ -66,7 +75,7 @@ def test_completion_service_changes_stage_and_calls_backend(
     assert completed.stage is expected_stage
     assert repository.load_state(project.id).stage is expected_stage
     assert api.completed == [("uid-12", 2.5)]
-    assert uploaded == [("uid-12", exported_file)]
+    assert file_transfer.uploaded == [("uid-12", exported_file)]
 
 
 def test_completion_service_blocks_completion_when_backend_is_unavailable(tmp_path: Path) -> None:
@@ -80,7 +89,10 @@ def test_completion_service_blocks_completion_when_backend_is_unavailable(tmp_pa
     repository = ProjectRepository(tmp_path)
     repository.create_local_project(project)
 
-    service = CompletionService(CompletionApi(available=False), repository)
+    service = CompletionService(
+        api_client=CompletionApi(available=False),
+        project_repository=repository,
+    )
 
     with pytest.raises(BackendError, match="Unable to reach"):
         service.complete_current_project(project=project, duration_hours=1.0)

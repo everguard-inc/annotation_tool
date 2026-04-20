@@ -43,7 +43,8 @@ def test_update_tool_runs_git_pull_and_shows_result(
     )
 
     def fake_run(command, capture_output, text):
-        assert command[:3] == ["git", "-C", command[2]]
+        assert command[0] == "git"
+        assert command[1] == "-C"
         assert command[-1] == "pull"
         return subprocess.CompletedProcess(command, 0, stdout="Updating abc..def\n", stderr="")
 

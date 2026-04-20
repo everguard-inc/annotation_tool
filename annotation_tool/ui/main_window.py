@@ -4,16 +4,20 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMessageBox
 
-from annotation_tool.core.exceptions import BackendError, UserVisibleError
+from annotation_tool.core.exceptions import UserVisibleError
 from annotation_tool.core.models import ProjectData
 from annotation_tool.core.settings import AppSettings, SettingsStore
 from annotation_tool.infrastructure.api_client import ApiClient
+from annotation_tool.infrastructure.file_transfer import FileTransferClient
 from annotation_tool.infrastructure.repositories.project_repository import ProjectRepository
+from annotation_tool.infrastructure.unzip import ArchiveUnzipper
 from annotation_tool.services.completion_service import CompletionService
+from annotation_tool.services.import_export_service import ImportExportService
 from annotation_tool.services.project_service import ProjectService
 from annotation_tool.ui.actions import AppActions
 from annotation_tool.ui.dialogs.error_dialog import ErrorDialog
 from annotation_tool.ui.dialogs.id_dialog import IdDialog
+from annotation_tool.ui.dialogs.progress_dialog import ProgressDialog
 from annotation_tool.ui.dialogs.project_selector_dialog import ProjectSelectorDialog
 from annotation_tool.ui.dialogs.settings_dialog import SettingsDialog
 from annotation_tool.ui.screens.base_screen import BaseProjectScreen
@@ -30,6 +34,7 @@ class MainWindow(QMainWindow):
         self.api_client: ApiClient | None = None
         self.project_service: ProjectService | None = None
         self.completion_service: CompletionService | None = None
+        self.import_export_service: ImportExportService | None = None
 
         self.current_project: ProjectData | None = None
         self.current_screen: BaseProjectScreen | None = None
@@ -64,10 +69,21 @@ class MainWindow(QMainWindow):
             return
 
         self.api_client = ApiClient(self.settings.api_url, self.settings.token)
+        file_transfer = FileTransferClient(self.settings.file_url, self.settings.token)
         repository = ProjectRepository(self.settings.data_dir)
 
-        self.project_service = ProjectService(self.api_client, repository)
-        self.completion_service = CompletionService(self.api_client, repository)
+        self.import_export_service = ImportExportService(
+            data_dir=self.settings.data_dir,
+            file_transfer=file_transfer,
+            unzipper=ArchiveUnzipper(),
+        )
+        self.project_service = ProjectService(self.api_client, repository, self.import_export_service)
+        self.completion_service = CompletionService(
+            self.api_client,
+            repository,
+            file_transfer=file_transfer,
+            import_export_service=self.import_export_service,
+        )
 
     def set_current_project_title(self, project_id: int | None) -> None:
         if project_id is None:
@@ -93,7 +109,10 @@ class MainWindow(QMainWindow):
             if project is None:
                 return
 
-            opened_project = self.project_service.open_project(project)
+            progress = self._progress("Opening project")
+            opened_project = self.project_service.open_project(project, progress=progress.update_progress)
+            progress.mark_complete()
+
             self._set_project_screen(opened_project)
         except UserVisibleError as error:
             ErrorDialog.show_error(str(error), self)
@@ -113,7 +132,10 @@ class MainWindow(QMainWindow):
             if project is None:
                 return
 
-            self.project_service.download_project(project)
+            progress = self._progress("Downloading project")
+            self.project_service.download_project(project, progress=progress.update_progress)
+            progress.mark_complete()
+
             QMessageBox.information(self, "Download", f"Project {project.id} downloaded.")
         except UserVisibleError as error:
             ErrorDialog.show_error(str(error), self)
@@ -132,11 +154,7 @@ class MainWindow(QMainWindow):
         if project is None:
             return
 
-        agree = QMessageBox.question(
-            self,
-            "Remove project",
-            f"Remove project {project.id} from this computer?",
-        )
+        agree = QMessageBox.question(self, "Remove project", f"Remove project {project.id} from this computer?")
         if agree != QMessageBox.StandardButton.Yes:
             return
 
@@ -191,6 +209,26 @@ class MainWindow(QMainWindow):
             self.current_project = completed_project
             self._close_current_project()
             QMessageBox.information(self, "Success", "Project completed.")
+        except UserVisibleError as error:
+            ErrorDialog.show_error(str(error), self)
+
+    def overwrite_annotations(self) -> None:
+        if self.current_project is None or self.project_service is None:
+            return
+
+        agree = QMessageBox.question(
+            self,
+            "Overwrite",
+            "Download annotations and overwrite local annotations?",
+        )
+        if agree != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            progress = self._progress("Overwriting annotations")
+            self.project_service.overwrite_annotations(self.current_project, progress=progress.update_progress)
+            progress.mark_complete()
+            QMessageBox.information(self, "Success", "Annotations overwritten.")
         except UserVisibleError as error:
             ErrorDialog.show_error(str(error), self)
 
@@ -296,6 +334,12 @@ class MainWindow(QMainWindow):
         window = HtmlWindow(title, html_path, self)
         window.show()
         self.html_windows.append(window)
+
+    def _progress(self, title: str) -> ProgressDialog:
+        dialog = ProgressDialog(title, self)
+        dialog.show()
+        QApplication.processEvents()
+        return dialog
 
 
 def run_app() -> None:
