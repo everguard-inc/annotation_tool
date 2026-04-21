@@ -65,7 +65,6 @@ class FilteringSession:
         frame = self.frame_provider.request_frame(self.item_id)
         self.current_name = self.barcode_decoder.decode_image_name(frame)
         self.repository.save_item_name(self.item_id, self.current_name)
-        self.frame_provider.prefetch(self.item_id, direction=1)
 
     def go_to_item(self, item_id: int) -> None:
         if self.item_count() == 0:
@@ -108,4 +107,6 @@ class FilteringSession:
 
     def close(self) -> None:
         self.save_current_item()
+        if hasattr(self.repository, "flush"):
+            self.repository.flush()
         self.frame_provider.close()

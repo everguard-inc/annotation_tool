@@ -11,12 +11,13 @@ class VideoFrameProvider(QObject):
     frame_ready = Signal(int, object)
     error = Signal(str)
 
-    def __init__(self, video_path: Path, cache_size: int = 120) -> None:
+    def __init__(self, video_path: Path, cache_size: int = 180) -> None:
         super().__init__()
         self.video_path = video_path
         self.cache = FrameCache(cache_size)
         self.capture: cv2.VideoCapture | None = None
         self._frame_count = 0
+        self._next_capture_index = 0
 
     def open(self) -> None:
         self.capture = cv2.VideoCapture(str(self.video_path))
@@ -24,11 +25,14 @@ class VideoFrameProvider(QObject):
             raise RuntimeError(f"Unable to open video: {self.video_path}")
 
         self._frame_count = int(self.capture.get(cv2.CAP_PROP_FRAME_COUNT))
+        self._next_capture_index = 0
 
     def frame_count(self) -> int:
         return self._frame_count
 
     def request_frame(self, index: int) -> np.ndarray:
+        index = self._normalize_index(index)
+
         cached = self.cache.get(index)
         if cached is not None:
             self.frame_ready.emit(index, cached)
@@ -40,16 +44,7 @@ class VideoFrameProvider(QObject):
         return frame
 
     def prefetch(self, start_index: int, direction: int) -> None:
-        if self.capture is None:
-            return
-
-        for offset in range(1, min(self.cache.max_size, 30)):
-            index = start_index + offset * direction
-            if index < 0 or index >= self._frame_count:
-                break
-
-            if not self.cache.contains(index):
-                self.cache.put(index, self._read_frame(index))
+        return None
 
     def get_cached(self, index: int) -> np.ndarray | None:
         return self.cache.get(index)
@@ -58,17 +53,26 @@ class VideoFrameProvider(QObject):
         if self.capture is not None:
             self.capture.release()
             self.capture = None
+
         self.cache.clear()
+        self._next_capture_index = 0
 
     def _read_frame(self, index: int) -> np.ndarray:
         if self.capture is None:
             raise RuntimeError("Video provider is not opened.")
 
-        index = max(0, min(index, self._frame_count - 1))
-        self.capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+        if index != self._next_capture_index:
+            self.capture.set(cv2.CAP_PROP_POS_FRAMES, index)
+            self._next_capture_index = index
 
         ok, frame = self.capture.read()
         if not ok or frame is None:
             raise RuntimeError(f"Unable to read video frame {index}")
 
+        self._next_capture_index = index + 1
         return frame
+
+    def _normalize_index(self, index: int) -> int:
+        if self._frame_count <= 0:
+            return 0
+        return max(0, min(index, self._frame_count - 1))

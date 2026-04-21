@@ -1,65 +1,55 @@
-from PySide6.QtWidgets import QDialog, QLabel, QProgressBar, QPushButton, QVBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication, QDialog, QLabel, QProgressBar, QVBoxLayout, QWidget
 
 
 class ProgressDialog(QDialog):
-    def __init__(self, title: str, parent=None) -> None:
+    def __init__(self, title: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(title)
-        self.resize(460, 140)
+        self.setModal(True)
+        self.setFixedSize(460, 130)
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
 
-        self._cancelled = False
+        self.label = QLabel("Starting...", self)
+        self.label.setWordWrap(True)
 
-        self.progress = QProgressBar(self)
-        self.progress.setRange(0, 100)
-
-        self.percent_label = QLabel("Starting...", self)
-        self.size_label = QLabel("Completed: 0 MB", self)
-        self.speed_label = QLabel("Speed: 0 MB/s", self)
-        self.remaining_label = QLabel("Remaining: --:--:--", self)
-
-        self.cancel_button = QPushButton("Cancel", self)
-        self.cancel_button.clicked.connect(self._cancel)
+        self.progress_bar = QProgressBar(self)
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(self.progress)
-        layout.addWidget(self.percent_label)
-        layout.addWidget(self.size_label)
-        layout.addWidget(self.speed_label)
-        layout.addWidget(self.remaining_label)
-        layout.addWidget(self.cancel_button)
+        layout.addWidget(self.label)
+        layout.addWidget(self.progress_bar)
+
+        self.setStyleSheet("""
+            QDialog { background: #f5f5f5; color: #111; }
+            QLabel { color: #111; font-size: 13px; }
+            QProgressBar { color: #111; text-align: center; height: 22px; }
+        """)
 
     def update_progress(
         self,
         percent: float,
-        completed_gb: float,
-        speed_mbps: float,
-        remaining_seconds: float,
+        size_gb: float = 0.0,
+        speed_mbps: float = 0.0,
+        remaining_seconds: float = 0.0,
     ) -> None:
-        self.progress.setValue(int(percent))
-        self.percent_label.setText(f"Completed: {percent:.2f} %")
+        percent = max(0.0, min(float(percent), 100.0))
+        self.progress_bar.setValue(int(percent))
 
-        if completed_gb < 1:
-            self.size_label.setText(f"Completed: {completed_gb * 1024:.2f} MB")
+        if remaining_seconds > 0:
+            self.label.setText(
+                f"Progress: {percent:.1f}% | "
+                f"Downloaded: {size_gb * 1024:.1f} MB | "
+                f"Speed: {speed_mbps:.1f} MB/s | "
+                f"Remaining: {int(remaining_seconds)} sec"
+            )
         else:
-            self.size_label.setText(f"Completed: {completed_gb:.2f} GB")
+            self.label.setText(f"Progress: {percent:.1f}%")
 
-        self.speed_label.setText(f"Speed: {speed_mbps:.2f} MB/s")
-
-        hours = int(remaining_seconds) // 3600
-        minutes = int(remaining_seconds) % 3600 // 60
-        seconds = int(remaining_seconds) % 60
-        self.remaining_label.setText(f"Remaining: {hours:02}:{minutes:02}:{seconds:02}")
+        QApplication.processEvents()
 
     def mark_complete(self) -> None:
-        self.progress.setValue(100)
-        self.percent_label.setText("Completed: 100.00 %")
-        self.cancel_button.setText("Close")
-        self.cancel_button.clicked.disconnect()
-        self.cancel_button.clicked.connect(self.accept)
-
-    def was_cancelled(self) -> bool:
-        return self._cancelled
-
-    def _cancel(self) -> None:
-        self._cancelled = True
-        self.reject()
+        self.update_progress(100)
+        self.close()
+        QApplication.processEvents()

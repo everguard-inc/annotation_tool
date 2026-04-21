@@ -57,8 +57,8 @@ class MainWindow(QMainWindow):
         if self.settings_store.has_empty_required_values():
             accepted = self.open_required_settings()
             if not accepted:
-                QApplication.quit()
-                return
+                QApplication.instance().quit()
+                raise SystemExit(0)
 
         self.settings = self.settings_store.load()
         self._build_services()
@@ -95,49 +95,42 @@ class MainWindow(QMainWindow):
 
     def open_project(self) -> None:
         if self.project_service is None:
-            ErrorDialog.show_error("Project service is not configured.", self)
+            raise RuntimeError("Project service is not configured.")
+
+        projects = self.project_service.get_available_projects()
+        if not projects:
+            QMessageBox.information(self, "Projects", "No projects available.")
             return
 
-        try:
-            projects = self.project_service.get_available_projects()
-            if not projects:
-                QMessageBox.information(self, "Projects", "No projects available.")
-                return
+        project = self._select_project(projects, "Open project")
+        if project is None:
+            return
 
-            project = self._select_project(projects, "Open project")
-            if project is None:
-                return
+        progress = self._progress("Opening project")
+        opened_project = self.project_service.open_project(project, progress=progress.update_progress)
+        progress.mark_complete()
 
-            progress = self._progress("Opening project")
-            opened_project = self.project_service.open_project(project, progress=progress.update_progress)
-            progress.mark_complete()
-
-            self._set_project_screen(opened_project)
-        except UserVisibleError as error:
-            ErrorDialog.show_error(str(error), self)
+        self._set_project_screen(opened_project)
 
     def download_project(self) -> None:
         if self.project_service is None:
-            ErrorDialog.show_error("Project service is not configured.", self)
+            raise RuntimeError("Project service is not configured.")
+
+        projects = self.project_service.get_projects_from_backend()
+        if not projects:
+            QMessageBox.information(self, "Projects", "No projects available for download.")
             return
 
-        try:
-            projects = self.project_service.get_projects_from_backend()
-            if not projects:
-                QMessageBox.information(self, "Projects", "No projects available for download.")
-                return
+        project = self._select_project(projects, "Download project")
+        if project is None:
+            return
 
-            project = self._select_project(projects, "Download project")
-            if project is None:
-                return
+        progress = self._progress("Downloading project")
+        self.project_service.download_project(project, progress=progress.update_progress)
+        progress.mark_complete()
 
-            progress = self._progress("Downloading project")
-            self.project_service.download_project(project, progress=progress.update_progress)
-            progress.mark_complete()
-
-            QMessageBox.information(self, "Download", f"Project {project.id} downloaded.")
-        except UserVisibleError as error:
-            ErrorDialog.show_error(str(error), self)
+        opened_project = self.project_service.open_project(project)
+        self._set_project_screen(opened_project)
 
     def remove_project(self) -> None:
         if self.project_service is None:

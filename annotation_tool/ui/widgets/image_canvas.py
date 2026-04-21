@@ -20,8 +20,11 @@ class ImageCanvas(QWidget):
         self._pixmap = QPixmap()
 
         self.scale_factor = 1.0
+        self.min_scale_factor = 0.5
+        self.max_scale_factor = 10.0
         self.x0 = 0.0
         self.y0 = 0.0
+
         self._panning = False
         self._pan_start_mouse = QPoint()
         self._pan_start_x0 = 0.0
@@ -30,17 +33,18 @@ class ImageCanvas(QWidget):
     def set_image(self, image: QImage) -> None:
         self._image = image
         self._pixmap = QPixmap.fromImage(image)
+        self._update_min_scale()
         self._clamp_view()
         self.update()
-
-    def set_overlay_enabled(self, enabled: bool) -> None:
-        self.update()
+        self.repaint()
 
     def fit_image(self) -> None:
         if self._image.isNull() or self.width() <= 0 or self.height() <= 0:
             return
 
-        self.scale_factor = min(self.width() / self._image.width(), self.height() / self._image.height())
+        self._update_min_scale()
+        fit_scale = min(self.width() / self._image.width(), self.height() / self._image.height())
+        self.scale_factor = max(fit_scale, self.min_scale_factor)
         self.x0 = 0.0
         self.y0 = 0.0
         self._clamp_view()
@@ -68,7 +72,12 @@ class ImageCanvas(QWidget):
         visible_height = self.height() / max(self.scale_factor, 1e-7)
 
         source = QRectF(self.x0, self.y0, visible_width, visible_height)
-        target = QRectF(0, 0, min(self.width(), self._image.width() * self.scale_factor), min(self.height(), self._image.height() * self.scale_factor))
+        target = QRectF(
+            0,
+            0,
+            min(self.width(), self._image.width() * self.scale_factor),
+            min(self.height(), self._image.height() * self.scale_factor),
+        )
 
         painter.drawPixmap(target, self._pixmap, source)
 
@@ -118,9 +127,9 @@ class ImageCanvas(QWidget):
 
         multiplier = 1.1
         if event.angleDelta().y() > 0:
-            self.scale_factor = min(self.scale_factor * multiplier, 10.0)
+            self.scale_factor = min(self.scale_factor * multiplier, self.max_scale_factor)
         else:
-            self.scale_factor = max(self.scale_factor / multiplier, 0.05)
+            self.scale_factor = max(self.scale_factor / multiplier, self.min_scale_factor)
 
         self.x0 = cursor_x - event.position().x() / self.scale_factor
         self.y0 = cursor_y - event.position().y() / self.scale_factor
@@ -145,6 +154,7 @@ class ImageCanvas(QWidget):
             self.key_released.emit(key)
 
     def resizeEvent(self, event) -> None:
+        self._update_min_scale()
         self._clamp_view()
         self.update()
 
@@ -169,14 +179,23 @@ class ImageCanvas(QWidget):
         if key == Qt.Key.Key_Escape:
             return "escape"
 
-        text = event.text().lower()
-        return text if text else ""
+        return event.text().lower() if event.text() else ""
+
+    def _update_min_scale(self) -> None:
+        if self._image.isNull() or self.width() <= 0 or self.height() <= 0:
+            self.min_scale_factor = 0.5
+            return
+
+        fit_scale = min(self.width() / self._image.width(), self.height() / self._image.height())
+        self.min_scale_factor = min(0.5, fit_scale)
 
     def _clamp_view(self) -> None:
         if self._image.isNull():
             self.x0 = 0.0
             self.y0 = 0.0
             return
+
+        self.scale_factor = max(self.min_scale_factor, min(self.scale_factor, self.max_scale_factor))
 
         visible_width = self.width() / max(self.scale_factor, 1e-7)
         visible_height = self.height() / max(self.scale_factor, 1e-7)

@@ -1,6 +1,6 @@
-import time
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QVBoxLayout
 
 from annotation_tool.core.enums import FilteringDelay
@@ -16,7 +16,8 @@ class FilteringScreen(BaseProjectScreen):
         super().__init__(parent)
         self.session = session
         self.selected_frames_path = selected_frames_path
-        self.last_frame_switch_time = 0.0
+        self.held_navigation_key: str | None = None
+        self.navigation_in_progress = False
 
         self.canvas = ImageCanvas(self)
         self.status_bar = FilteringStatusBar(self)
@@ -26,12 +27,12 @@ class FilteringScreen(BaseProjectScreen):
         layout.addWidget(self.status_bar)
 
         self.canvas.key_pressed.connect(self.handle_key_press)
-        self.canvas.mouse_hovered.connect(lambda *_: None)
-        self.canvas.mouse_pressed.connect(lambda *_: None)
-        self.canvas.mouse_moved.connect(lambda *_: None)
-        self.canvas.mouse_released.connect(lambda *_: None)
+        self.canvas.key_released.connect(self.handle_key_release)
 
-        self.refresh(fit=True)
+        self.navigation_timer = QTimer(self)
+        self.navigation_timer.timeout.connect(self._repeat_navigation)
+
+        QTimer.singleShot(0, lambda: self.refresh(fit=True))
 
     @property
     def items_count(self) -> int:
@@ -53,6 +54,8 @@ class FilteringScreen(BaseProjectScreen):
         self.session.save_current_item()
 
     def close_screen(self) -> None:
+        self.navigation_timer.stop()
+        self.held_navigation_key = None
         self.session.close()
 
     def go_to_id(self, item_id: int) -> None:
@@ -64,26 +67,21 @@ class FilteringScreen(BaseProjectScreen):
         self.refresh()
 
     def export_results(self) -> list:
+        self.session.save_current_item()
+        if hasattr(self.session.repository, "flush"):
+            self.session.repository.flush()
         return [self.selected_frames_path]
 
     def should_remove_after_completion(self) -> bool:
         return False
 
     def handle_key_press(self, key: str) -> None:
-        now = time.time()
-        if now - self.last_frame_switch_time < self.session.delay.value:
-            return
+        if key in {"w", "p", "q", "o"}:
+            self.held_navigation_key = key
 
-        if key in {"w", "p"}:
-            self.session.next_item()
-            self.last_frame_switch_time = now
-            self.refresh(fit=True)
-            return
-
-        if key in {"q", "o"}:
-            self.session.previous_item()
-            self.last_frame_switch_time = now
-            self.refresh(fit=True)
+            if not self.navigation_timer.isActive():
+                self._repeat_navigation()
+                self.navigation_timer.start(self._navigation_interval_ms())
             return
 
         if key == "f":
@@ -100,11 +98,41 @@ class FilteringScreen(BaseProjectScreen):
             self.session.toggle_degraded_preview()
         elif key == "1":
             self.session.set_delay(FilteringDelay.NO_DELAY)
+            self._restart_timer_if_needed()
         elif key == "2":
             self.session.set_delay(FilteringDelay.SHORT)
+            self._restart_timer_if_needed()
         elif key == "3":
             self.session.set_delay(FilteringDelay.MIDDLE)
+            self._restart_timer_if_needed()
         elif key == "4":
             self.session.set_delay(FilteringDelay.LONG)
+            self._restart_timer_if_needed()
 
         self.refresh()
+
+    def handle_key_release(self, key: str) -> None:
+        if key == self.held_navigation_key:
+            self.held_navigation_key = None
+            self.navigation_timer.stop()
+
+    def _repeat_navigation(self) -> None:
+        if self.navigation_in_progress or self.held_navigation_key is None:
+            return
+
+        self.navigation_in_progress = True
+        try:
+            if self.held_navigation_key in {"w", "p"}:
+                self.session.next_item()
+            elif self.held_navigation_key in {"q", "o"}:
+                self.session.previous_item()
+            self.refresh(fit=True)
+        finally:
+            self.navigation_in_progress = False
+
+    def _navigation_interval_ms(self) -> int:
+        return max(1, int(self.session.delay.value * 1000))
+
+    def _restart_timer_if_needed(self) -> None:
+        if self.navigation_timer.isActive():
+            self.navigation_timer.start(self._navigation_interval_ms())

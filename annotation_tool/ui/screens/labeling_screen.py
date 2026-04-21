@@ -17,6 +17,7 @@ class LabelingScreen(BaseProjectScreen):
         self.session = session
         self.last_frame_switch_time = 0.0
         self.min_frame_switch_interval = 0.1
+        self.navigation_in_progress = False
 
         self.canvas = ImageCanvas(self)
         self.status_bar = LabelingStatusBar(self)
@@ -45,8 +46,10 @@ class LabelingScreen(BaseProjectScreen):
 
     def refresh(self, fit: bool = False) -> None:
         self.canvas.set_image(numpy_to_qimage(self.session.render_frame()))
+
         if fit:
             self.canvas.fit_image()
+
         self.status_bar.update_status(self.session.status())
 
     def save(self) -> None:
@@ -105,22 +108,13 @@ class LabelingScreen(BaseProjectScreen):
         self.session.set_cursor(x, y)
         self.session.handle_mouse_hover(x, y)
         self.refresh()
-
     def handle_key_press(self, key: str) -> None:
-        now = time.time()
+        if key in {"w", "p", "q", "o"}:
+            self.held_navigation_key = key
 
-        if key in {"w", "p"}:
-            if now - self.last_frame_switch_time >= self.min_frame_switch_interval:
-                self.session.next_item()
-                self.last_frame_switch_time = now
-                self.refresh(fit=True)
-            return
-
-        if key in {"q", "o"}:
-            if now - self.last_frame_switch_time >= self.min_frame_switch_interval:
-                self.session.previous_item()
-                self.last_frame_switch_time = now
-                self.refresh(fit=True)
+            if not self.navigation_timer.isActive():
+                self._repeat_navigation()
+                self.navigation_timer.start(self.navigation_interval_ms)
             return
 
         if key == "f":
@@ -170,6 +164,11 @@ class LabelingScreen(BaseProjectScreen):
         self.refresh()
 
     def handle_key_release(self, key: str) -> None:
+        if key == self.held_navigation_key:
+            self.held_navigation_key = None
+            self.navigation_timer.stop()
+            return
+
         if key == "shift":
             self.session.set_shift_mode(False)
             return
@@ -180,3 +179,17 @@ class LabelingScreen(BaseProjectScreen):
                 self.session.set_active_label_by_hotkey(selected.hotkey)
             self.class_wheel.close()
             self.refresh()
+
+    def _repeat_navigation(self) -> None:
+        if getattr(self, "navigation_in_progress", False) or self.held_navigation_key is None:
+            return
+
+        self.navigation_in_progress = True
+        try:
+            if self.held_navigation_key in {"w", "p"}:
+                self.session.next_item()
+            elif self.held_navigation_key in {"q", "o"}:
+                self.session.previous_item()
+            self.refresh(fit=True)
+        finally:
+            self.navigation_in_progress = False
