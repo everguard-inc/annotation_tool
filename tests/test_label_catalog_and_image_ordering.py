@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from annotation_tool.infrastructure.repositories.labeling_repository import LabelingRepository
+from annotation_tool.services.labeling_session import LabelingSession
 
 
 def test_labels_and_images_are_returned_in_stable_order(data_dir: Path, labeling_project, labeling_cache) -> None:
@@ -13,3 +14,15 @@ def test_labels_and_images_are_returned_in_stable_order(data_dir: Path, labeling
     assert [label.name for label in labels] == ["blur", "car", "truck"]
     assert [label.hotkey for label in labels] == ["0", "1", "2"]
     assert image_names == ["a.jpg", "b.jpg"]
+
+
+def test_blur_label_is_not_selected_by_default(
+    data_dir: Path, labeling_project, labeling_cache
+) -> None:
+    """Tk defaults to the first real annotation class, not synthetic blur."""
+    repository = LabelingRepository(data_dir, labeling_project.id)
+
+    session = LabelingSession(labeling_project, repository)
+
+    assert session.active_label is not None
+    assert session.active_label.name == "car"

@@ -9,14 +9,19 @@ from annotation_tool.ui.dialogs.settings_dialog import SettingsDialog
 
 
 def test_settings_file_is_created_with_empty_required_values(tmp_path: Path) -> None:
-    """Covers first-launch settings requirement."""
+    """Covers FR-022, FR-024."""
     settings_path = tmp_path / "settings.json"
 
     store = SettingsStore(settings_path)
 
     assert settings_path.exists()
     assert store.has_empty_required_values()
-    assert store.missing_required_values() == ["token", "api_url", "file_url", "data_dir"]
+    assert store.missing_required_values() == [
+        "token",
+        "api_url",
+        "file_url",
+        "data_dir",
+    ]
 
     with pytest.raises(SettingsError, match="Missing required settings"):
         store.load()
@@ -27,7 +32,7 @@ def test_required_settings_dialog_blocks_save_until_required_fields_are_filled(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """Covers first-launch settings requirement: Save validates token, api_url, file_url, data_dir."""
+    """Covers FR-022, FR-024."""
     store = SettingsStore(tmp_path / "settings.json")
     warnings = []
 

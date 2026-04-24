@@ -38,3 +38,32 @@ def test_bbox_can_be_created_selected_resized_relabelled_and_deleted(
     session.handle_mouse_release(10, 10)
     session.delete_all()
     assert session.controller.figures() == []
+
+
+def test_bbox_creation_shows_live_preview_while_dragging(
+    data_dir,
+    object_project,
+    rich_labeling_cache,
+) -> None:
+    repository = LabelingRepository(data_dir, object_project.id)
+    session = LabelingSession(object_project, repository)
+
+    session.set_active_label_by_hotkey("1")
+    session.handle_mouse_press(2, 3)
+    session.handle_mouse_move(20, 15)
+
+    assert session.controller.figures() == []
+    preview = session.controller.preview
+    assert preview is not None
+    assert preview.serialize() == {"x1": 2, "y1": 3, "x2": 20, "y2": 15, "label": "car"}
+
+    session.handle_mouse_release(20, 15)
+
+    assert session.controller.preview is None
+    assert session.controller.figures()[0].serialize() == {
+        "x1": 2,
+        "y1": 3,
+        "x2": 20,
+        "y2": 15,
+        "label": "car",
+    }

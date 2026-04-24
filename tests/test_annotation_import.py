@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
+from annotation_tool.core.exceptions import OperationCancelled
 from annotation_tool.core.paths import LabelingPaths
 from annotation_tool.core.utils import read_json
 from annotation_tool.services.import_export_service import ImportExportService
@@ -63,6 +65,50 @@ class FakeUnzipper:
             progress(100, 0, 0, 0)
 
 
+class RecordingFileTransfer(FakeFileTransfer):
+    def __init__(self) -> None:
+        self.cancel_callbacks = []
+
+    def download(self, uid, file_name, save_path, progress=None, should_cancel=None, ignore_404=False):
+        self.cancel_callbacks.append(should_cancel)
+        super().download(
+            uid,
+            file_name,
+            save_path,
+            progress=progress,
+            should_cancel=should_cancel,
+            ignore_404=ignore_404,
+        )
+
+
+class RecordingUnzipper(FakeUnzipper):
+    def __init__(self) -> None:
+        self.cancel_callbacks = []
+
+    def unzip(self, archive_path, output_dir, progress=None, should_cancel=None):
+        self.cancel_callbacks.append(should_cancel)
+        super().unzip(
+            archive_path,
+            output_dir,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+
+
+class CancellingFileTransfer:
+    def __init__(self) -> None:
+        self.downloaded = []
+
+    def download(self, uid, file_name, save_path, progress=None, should_cancel=None, ignore_404=False):
+        self.downloaded.append(file_name)
+        if should_cancel is not None and should_cancel():
+            return
+        raise AssertionError("Cancellation should stop before writing files.")
+
+    def upload(self, uid, file_path):
+        raise AssertionError("Upload is not expected here")
+
+
 def test_labeling_project_import_downloads_files_unpacks_images_and_builds_cache(
     data_dir: Path,
     labeling_project,
@@ -90,3 +136,42 @@ def test_labeling_project_import_downloads_files_unpacks_images_and_builds_cache
     assert cache["items"][1]["requires_annotation"] is True
     assert any(label["name"] == "blur" for label in cache["labels"])
     assert cache["review"]["img2.jpg"][0]["label"] == "Fix"
+
+
+def test_labeling_project_import_forwards_cancellation_to_download_and_unzip(
+    data_dir: Path,
+    labeling_project,
+) -> None:
+    file_transfer = RecordingFileTransfer()
+    unzipper = RecordingUnzipper()
+    service = ImportExportService(
+        data_dir=data_dir,
+        file_transfer=file_transfer,
+        unzipper=unzipper,
+    )
+
+    def should_cancel() -> bool:
+        return False
+
+    service.import_labeling_project(labeling_project, should_cancel=should_cancel)
+
+    assert file_transfer.cancel_callbacks
+    assert all(callback is should_cancel for callback in file_transfer.cancel_callbacks)
+    assert unzipper.cancel_callbacks == [should_cancel]
+
+
+def test_labeling_project_import_aborts_when_cancellation_is_requested(
+    data_dir: Path,
+    labeling_project,
+) -> None:
+    file_transfer = CancellingFileTransfer()
+    service = ImportExportService(
+        data_dir=data_dir,
+        file_transfer=file_transfer,
+        unzipper=FakeUnzipper(),
+    )
+
+    with pytest.raises(OperationCancelled):
+        service.import_labeling_project(labeling_project, should_cancel=lambda: True)
+
+    assert file_transfer.downloaded == ["meta.json"]

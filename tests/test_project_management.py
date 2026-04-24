@@ -3,8 +3,10 @@ from pathlib import Path
 import pytest
 
 from annotation_tool.core.enums import AnnotationMode, AnnotationStage
-from annotation_tool.core.exceptions import BackendError
+from annotation_tool.core.exceptions import BackendError, OperationCancelled
 from annotation_tool.core.models import ProjectData
+from annotation_tool.core.paths import ProjectPaths
+from annotation_tool.core.utils import read_json, write_json
 from annotation_tool.infrastructure.repositories.project_repository import ProjectRepository
 from annotation_tool.services.project_service import ProjectService
 
@@ -107,3 +109,87 @@ def test_project_service_opens_project_and_persists_latest_state(tmp_path: Path)
     assert opened == updated
     assert repository.load_state(9).stage is AnnotationStage.REVIEW
     assert repository.is_valid(9)
+
+
+def test_project_service_reinitializes_valid_project_when_stage_changes(
+    tmp_path: Path,
+) -> None:
+    original = ProjectData(
+        id=9,
+        uid="uid-9",
+        stage=AnnotationStage.ANNOTATE,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+    updated = ProjectData(
+        id=9,
+        uid="uid-9",
+        stage=AnnotationStage.REVIEW,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+    paths = ProjectPaths(tmp_path, 9)
+    repository = ProjectRepository(tmp_path)
+    repository.create_local_project(original)
+    write_json(
+        paths.runtime_state_path,
+        {
+            "item_id": 7,
+            "duration_hours": 2.0,
+            "processed_item_ids": [1, 3],
+        },
+    )
+
+    class FakeImportExportService:
+        def __init__(self):
+            self.imported = []
+            self.overwrite_calls = []
+
+        def import_project(self, project, progress=None, should_cancel=None):
+            self.imported.append(project)
+
+        def overwrite_annotations(self, project, progress=None, should_cancel=None):
+            self.overwrite_calls.append(project)
+
+    import_export_service = FakeImportExportService()
+    service = ProjectService(
+        StaticApi([updated]),
+        repository,
+        import_export_service=import_export_service,
+    )
+
+    opened = service.open_project(updated)
+
+    assert opened == updated
+    assert import_export_service.imported == [updated]
+    assert import_export_service.overwrite_calls == []
+    assert repository.load_state(9).stage is AnnotationStage.REVIEW
+    assert read_json(paths.runtime_state_path)["item_id"] == 0
+    assert read_json(paths.runtime_state_path)["duration_hours"] == 0.0
+    assert read_json(paths.runtime_state_path)["processed_item_ids"] == []
+
+
+def test_project_service_removes_fresh_local_project_when_download_is_cancelled(
+    tmp_path: Path,
+) -> None:
+    project = ProjectData(
+        id=9,
+        uid="uid-9",
+        stage=AnnotationStage.ANNOTATE,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+
+    class CancellingImportExportService:
+        def import_project(self, project, progress=None, should_cancel=None):
+            raise OperationCancelled("cancelled")
+
+    repository = ProjectRepository(tmp_path)
+    service = ProjectService(
+        StaticApi([project]),
+        repository,
+        import_export_service=CancellingImportExportService(),
+    )
+
+    with pytest.raises(OperationCancelled):
+        service.download_project(project)
+
+    assert not repository.is_valid(project.id)
+    assert not (tmp_path / "data" / "00009").exists()
