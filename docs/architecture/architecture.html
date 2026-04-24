@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PySide Annotation Tool Architecture</title>
+  <style>
+    :root {
+      --ink: #152027;
+      --muted: #52616b;
+      --line: #cfd8dc;
+      --panel: #ffffff;
+      --bg: #f4f7f8;
+      --blue: #2563a8;
+      --green: #2f7d4f;
+      --amber: #a15c16;
+      --red: #a33a3a;
+      --violet: #5e4b8b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.5;
+    }
+
+    header {
+      background: #12313f;
+      color: #fff;
+      padding: 40px 28px 32px;
+    }
+
+    header .inner,
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 0 0 18px;
+      font-size: 24px;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    code {
+      font-family: Consolas, Monaco, monospace;
+      font-size: 0.95em;
+      background: #eef3f5;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    main {
+      padding: 28px;
+    }
+
+    section {
+      margin-bottom: 28px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+    }
+
+    .intro {
+      max-width: 860px;
+      color: #e4eef2;
+      font-size: 17px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #eaf3f5;
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--blue);
+      display: inline-block;
+    }
+
+    .dot.green { background: var(--green); }
+    .dot.amber { background: var(--amber); }
+    .dot.red { background: var(--red); }
+    .dot.violet { background: var(--violet); }
+
+    .layer-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .layer {
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--blue);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 150px;
+      background: #fbfdfe;
+    }
+
+    .layer.ui { border-top-color: var(--green); }
+    .layer.service { border-top-color: var(--amber); }
+    .layer.repo { border-top-color: var(--red); }
+    .layer.domain { border-top-color: var(--violet); }
+
+    .layer ul,
+    .notes ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+    }
+
+    .layer li,
+    .notes li {
+      margin: 4px 0;
+    }
+
+    .route-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(220px, 1fr));
+      gap: 16px;
+    }
+
+    .route {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfe;
+      padding: 16px;
+    }
+
+    .route.annotation { border-left: 6px solid var(--violet); }
+    .route.filtering { border-left: 6px solid var(--green); }
+    .route.validation { border-left: 6px solid var(--amber); }
+
+    .route .mode {
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .pipe {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      align-items: center;
+    }
+
+    .step {
+      min-height: 110px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      background: #fbfdfe;
+      position: relative;
+    }
+
+    .step:after {
+      content: ">";
+      position: absolute;
+      right: -10px;
+      top: 42%;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .step:last-child:after {
+      content: "";
+    }
+
+    .workflow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .workflow {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdfe;
+      padding: 16px;
+    }
+
+    .workflow.annotation h3 { color: var(--violet); }
+    .workflow.filtering h3 { color: var(--green); }
+    .workflow.validation h3 { color: var(--amber); }
+
+    .mini-flow {
+      display: grid;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .mini-flow div {
+      border-left: 4px solid var(--line);
+      padding: 8px 10px;
+      background: #fff;
+    }
+
+    .files {
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      text-align: left;
+      padding: 10px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #eef3f5;
+    }
+
+    .callout {
+      border-left: 5px solid var(--red);
+      background: #fff7f6;
+      padding: 14px 16px;
+      border-radius: 6px;
+      margin-top: 14px;
+    }
+
+    @media (max-width: 980px) {
+      .layer-grid,
+      .route-grid,
+      .pipe,
+      .workflow-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .step:after {
+        content: "";
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>PySide Annotation Tool Architecture</h1>
+      <p class="intro">
+        The app is a Qt desktop shell that mounts one project workflow at a time. Screens handle input,
+        sessions own workflow state, repositories own local persistence, and import/export services translate
+        backend artifacts into local caches.
+      </p>
+      <div class="legend" aria-label="diagram legend">
+        <span><i class="dot"></i> Shell</span>
+        <span><i class="dot green"></i> UI</span>
+        <span><i class="dot amber"></i> Services</span>
+        <span><i class="dot red"></i> Repositories</span>
+        <span><i class="dot violet"></i> Annotation domain</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Layered Design</h2>
+      <div class="layer-grid">
+        <article class="layer shell">
+          <h3>Shell</h3>
+          <p><code>MainWindow</code> loads settings, builds shared services, routes menu actions, and chooses the active screen.</p>
+          <ul>
+            <li><code>ui/main_window.py</code></li>
+            <li><code>ui/actions.py</code></li>
+          </ul>
+        </article>
+        <article class="layer ui">
+          <h3>Screens and Widgets</h3>
+          <p>Workflow screens translate Qt events into session calls. Widgets render canvas, status bars, classes, and HTML.</p>
+          <ul>
+            <li><code>ui/screens/</code></li>
+            <li><code>ui/widgets/</code></li>
+          </ul>
+        </article>
+        <article class="layer service">
+          <h3>Services</h3>
+          <p>Sessions own item navigation, runtime state, timing, status data, and workflow commands.</p>
+          <ul>
+            <li><code>services/*_session.py</code></li>
+            <li><code>services/import_export_service.py</code></li>
+          </ul>
+        </article>
+        <article class="layer repo">
+          <h3>Repositories</h3>
+          <p>Repositories define cache schemas, load/save workflow data, and migrate from Tk-era SQLite when needed.</p>
+          <ul>
+            <li><code>infrastructure/repositories/</code></li>
+            <li><code>core/paths.py</code></li>
+          </ul>
+        </article>
+        <article class="layer domain">
+          <h3>Annotation Domain</h3>
+          <p>Figure models and <code>FigureController</code> implement drawing, hit testing, history, clipboard, masks, and keypoints.</p>
+          <ul>
+            <li><code>annotation/</code></li>
+            <li><code>media/</code></li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Project Routing</h2>
+      <div class="route-grid">
+        <article class="route annotation">
+          <div class="mode">Object detection, segmentation, keypoints</div>
+          <p><code>LabelingPaths</code> + <code>LabelingRepository</code> + <code>LabelingSession</code> + <code>LabelingScreen</code></p>
+          <p>Uses image files and figure/review cache data.</p>
+        </article>
+        <article class="route filtering">
+          <div class="mode">Filtering</div>
+          <p><code>FilteringPaths</code> + <code>FilteringRepository</code> + <code>FilteringSession</code> + <code>FilteringScreen</code></p>
+          <p>Uses <code>video.mp4</code>, frame indexes, optional decoded names, and selected flags.</p>
+        </article>
+        <article class="route validation">
+          <div class="mode">Event validation</div>
+          <p><code>EventValidationPaths</code> + <code>EventValidationRepository</code> + <code>EventValidationSession</code> + <code>EventValidationScreen</code></p>
+          <p>Uses event videos, optional images, question fields, answers, and comments.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Shared Input Pipeline</h2>
+      <div class="pipe">
+        <div class="step">
+          <h3>Qt Event</h3>
+          <p>Canvas, keyboard, combo box, text edit, slider, or menu action.</p>
+        </div>
+        <div class="step">
+          <h3>Screen</h3>
+          <p>Thin handler maps UI input to a session command.</p>
+        </div>
+        <div class="step">
+          <h3>Session</h3>
+          <p>Updates workflow state, tracks action time, saves current item when navigating.</p>
+        </div>
+        <div class="step">
+          <h3>Repository</h3>
+          <p>Reads or writes <code>cache.json</code> and performs migration fallback.</p>
+        </div>
+        <div class="step">
+          <h3>Refresh</h3>
+          <p>Screen redraws canvas and updates status/sidebar controls.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Workflow Details</h2>
+      <div class="workflow-grid">
+        <article class="workflow annotation">
+          <h3>Annotation</h3>
+          <p>Stage controls the item list and label catalog. Non-review stages edit figures. Review stage places review-label callouts.</p>
+          <div class="mini-flow">
+            <div>Load image annotations from <code>cache.json</code>.</div>
+            <div>Create <code>FigureController</code> for project mode or review labels.</div>
+            <div>Mouse and keyboard events mutate controller figures.</div>
+            <div>Render image with overlays, blur regions, review labels, and status.</div>
+            <div>Navigation saves serialized figures or review labels.</div>
+          </div>
+          <p class="files">Key files: <code>labeling_screen.py</code>, <code>labeling_session.py</code>, <code>labeling_repository.py</code>, <code>annotation/</code>.</p>
+        </article>
+
+        <article class="workflow filtering">
+          <h3>Filtering</h3>
+          <p>Each video frame is an item. A barcode decoder supplies a stable image name when possible; otherwise the frame id remains valid.</p>
+          <div class="mini-flow">
+            <div>Open <code>video.mp4</code> with <code>VideoFrameProvider</code>.</div>
+            <div>Request current frame and decode item name.</div>
+            <div>Toggle selected state in <code>FilteringRepository</code>.</div>
+            <div>Render selected frames with a green border.</div>
+            <div>Export selected names or fallback ids to <code>selected_frames.json</code>.</div>
+          </div>
+          <p class="files">Key files: <code>filtering_screen.py</code>, <code>filtering_session.py</code>, <code>filtering_repository.py</code>, <code>media/</code>.</p>
+        </article>
+
+        <article class="workflow validation">
+          <h3>Event Validation</h3>
+          <p>Each event uid maps to media plus ordered answers. The sidebar edits answers/comments while the canvas shows video or image evidence.</p>
+          <div class="mini-flow">
+            <div>Build fields from <code>meta.json</code> and events from media/results.</div>
+            <div>Load video frames, capped by <code>MAX_EVENT_VALIDATION_VIDEO_FRAMES</code>.</div>
+            <div>Sidebar combo boxes update ordered answers.</div>
+            <div>Keyboard and playback controls step frames/events.</div>
+            <div>Export ordered answers and comments to <code>event_validation_results.json</code>.</div>
+          </div>
+          <p class="files">Key files: <code>event_validation_screen.py</code>, <code>event_validation_session.py</code>, <code>event_validation_repository.py</code>.</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Persistence and Artifact Boundaries</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Owner</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>state.json</code></td>
+            <td><code>ProjectRepository</code></td>
+            <td>Local project id, uid, stage, and mode.</td>
+          </tr>
+          <tr>
+            <td><code>runtime_state.json</code></td>
+            <td><code>SessionStateStore</code></td>
+            <td>Current item, duration hours, and processed item ids.</td>
+          </tr>
+          <tr>
+            <td><code>cache.json</code></td>
+            <td>Mode repository</td>
+            <td>Working cache for labels, items, figures, selections, or event answers.</td>
+          </tr>
+          <tr>
+            <td><code>figures.json</code>, <code>review.json</code></td>
+            <td><code>ImportExportService</code></td>
+            <td>Labeling artifacts downloaded from and uploaded to the backend file service.</td>
+          </tr>
+          <tr>
+            <td><code>selected_frames.json</code></td>
+            <td><code>FilteringScreen</code> or <code>ImportExportService</code></td>
+            <td>Completion export for filtering selections.</td>
+          </tr>
+          <tr>
+            <td><code>event_validation_results.json</code></td>
+            <td><code>EventValidationScreen</code> or <code>ImportExportService</code></td>
+            <td>Completion export for event answers and comments.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="notes">
+      <h2>Design Guardrails</h2>
+      <ul>
+        <li>Keep screens thin. Workflow rules belong in sessions, repositories, or services.</li>
+        <li>Keep cache schema knowledge inside repositories and import/export.</li>
+        <li>Use <code>core/paths.py</code> for persisted paths.</li>
+        <li>Do not let overwrite save stale screen state before reloading downloaded annotations.</li>
+        <li>For event validation, preserve field order because answers are stored as ordered lists.</li>
+      </ul>
+      <div class="callout">
+        <strong>Current completion gap:</strong>
+        <code>EventValidationRepository.count_incomplete()</code> can detect unanswered events, but
+        <code>CompletionService.check_before_completion()</code> currently returns success for all workflows.
+        Wire this deliberately if completion should block incomplete validation.
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -13,4 +13,8 @@ prompting
 collect.py
 .codex
 claude_test/
-docs/quality/headed-evidence-*/
+docs/*
+!docs/architecture/
+!docs/architecture/**
+!docs/product/
+!docs/product/**
