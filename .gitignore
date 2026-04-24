@@ -1,4 +1,5 @@
 __pycache__
+.pytest_cache/
 data
 temp*.py
 venv
@@ -10,3 +11,6 @@ message_to_code.py
 .gitignore
 prompting
 collect.py
+.codex
+claude_test/
+docs/quality/headed-evidence-*/
