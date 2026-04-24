@@ -9,6 +9,8 @@ class ProgressDialog(QDialog):
         self.setModal(True)
         self.setFixedSize(460, 130)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
+        self._cancel_requested = False
+        self._completed = False
 
         self.label = QLabel("Starting...", self)
         self.label.setWordWrap(True)
@@ -50,6 +52,15 @@ class ProgressDialog(QDialog):
         QApplication.processEvents()
 
     def mark_complete(self) -> None:
+        self._completed = True
         self.update_progress(100)
         self.close()
         QApplication.processEvents()
+
+    def should_cancel(self) -> bool:
+        return self._cancel_requested
+
+    def closeEvent(self, event) -> None:
+        if not self._completed:
+            self._cancel_requested = True
+        event.accept()

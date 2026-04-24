@@ -14,6 +14,10 @@ class ProjectError(UserVisibleError):
     pass
 
 
+class OperationCancelled(UserVisibleError):
+    pass
+
+
 class BackendError(UserVisibleError):
     pass
 

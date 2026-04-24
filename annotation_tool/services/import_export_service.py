@@ -2,12 +2,16 @@ import os
 from pathlib import Path
 from typing import Any
 
-from annotation_tool.core.enums import AnnotationMode
-from annotation_tool.core.exceptions import UserVisibleError
+from annotation_tool.core.enums import AnnotationMode, AnnotationStage
+from annotation_tool.core.exceptions import OperationCancelled, UserVisibleError
 from annotation_tool.core.models import ProjectData
-from annotation_tool.core.paths import FilteringPaths, LabelingPaths
+from annotation_tool.core.paths import EventValidationPaths, FilteringPaths, LabelingPaths
 from annotation_tool.core.utils import image_size, is_valid_json, read_json, write_json
-from annotation_tool.infrastructure.file_transfer import FileTransferClient, ProgressCallback
+from annotation_tool.infrastructure.file_transfer import (
+    CancelCallback,
+    FileTransferClient,
+    ProgressCallback,
+)
 from annotation_tool.infrastructure.unzip import ArchiveUnzipper
 
 
@@ -22,31 +26,79 @@ class ImportExportService:
         self.file_transfer = file_transfer
         self.unzipper = unzipper or ArchiveUnzipper()
 
-    def import_project(self, project: ProjectData, progress: ProgressCallback | None = None) -> None:
-        if project.mode is AnnotationMode.FILTERING:
-            self.import_filtering_project(project, progress)
-        elif project.mode is AnnotationMode.EVENT_VALIDATION:
-            return
+    def import_project(
+        self,
+        project: ProjectData,
+        progress: ProgressCallback | None = None,
+        should_cancel: CancelCallback | None = None,
+    ) -> None:
+        if project.mode is AnnotationMode.EVENT_VALIDATION:
+            self.import_event_validation_project(project, progress, should_cancel)
+        elif project.mode is AnnotationMode.FILTERING:
+            self.import_filtering_project(project, progress, should_cancel)
         else:
-            self.import_labeling_project(project, progress)
+            self.import_labeling_project(project, progress, should_cancel)
 
-    def import_labeling_project(self, project: ProjectData, progress: ProgressCallback | None = None) -> None:
+    def import_labeling_project(
+        self,
+        project: ProjectData,
+        progress: ProgressCallback | None = None,
+        should_cancel: CancelCallback | None = None,
+    ) -> None:
         if project.uid is None:
             raise UserVisibleError("Project UID is missing.")
 
         paths = LabelingPaths(self.data_dir, project.id)
         paths.ensure_project_dir()
 
-        self.file_transfer.download(project.uid, paths.meta_path.name, paths.meta_path, progress=progress)
-        self.file_transfer.download(project.uid, paths.figures_path.name, paths.figures_path, progress=progress)
-        self.file_transfer.download(project.uid, paths.review_path.name, paths.review_path, progress=progress, ignore_404=True)
+        self.file_transfer.download(
+            project.uid,
+            paths.meta_path.name,
+            paths.meta_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.figures_path.name,
+            paths.figures_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.review_path.name,
+            paths.review_path,
+            progress=progress,
+            should_cancel=should_cancel,
+            ignore_404=True,
+        )
+        self._raise_if_cancelled(should_cancel)
 
         figures = read_json(paths.figures_path)
         expected_images_count = len(figures)
 
-        if not paths.images_dir.exists() or self._images_count(paths.images_dir) != expected_images_count:
-            self.file_transfer.download(project.uid, paths.archive_path.name, paths.archive_path, progress=progress)
-            self.unzipper.unzip(paths.archive_path, paths.images_dir, progress=progress)
+        if (
+            not paths.images_dir.exists()
+            or self._images_count(paths.images_dir) != expected_images_count
+        ):
+            self.file_transfer.download(
+                project.uid,
+                paths.archive_path.name,
+                paths.archive_path,
+                progress=progress,
+                should_cancel=should_cancel,
+            )
+            self._raise_if_cancelled(should_cancel)
+            self.unzipper.unzip(
+                paths.archive_path,
+                paths.images_dir,
+                progress=progress,
+                should_cancel=should_cancel,
+            )
+            self._raise_if_cancelled(should_cancel)
             paths.archive_path.unlink(missing_ok=True)
 
         actual_images_count = self._images_count(paths.images_dir)
@@ -58,15 +110,34 @@ class ImportExportService:
 
         self._build_labeling_cache(paths)
 
-    def import_filtering_project(self, project: ProjectData, progress: ProgressCallback | None = None) -> None:
+    def import_filtering_project(
+        self,
+        project: ProjectData,
+        progress: ProgressCallback | None = None,
+        should_cancel: CancelCallback | None = None,
+    ) -> None:
         if project.uid is None:
             raise UserVisibleError("Project UID is missing.")
 
         paths = FilteringPaths(self.data_dir, project.id)
         paths.ensure_project_dir()
 
-        self.file_transfer.download(project.uid, paths.video_path.name, paths.video_path, progress=progress)
-        self.file_transfer.download(project.uid, paths.meta_path.name, paths.meta_path, progress=progress)
+        self.file_transfer.download(
+            project.uid,
+            paths.video_path.name,
+            paths.video_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.meta_path.name,
+            paths.meta_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
 
         meta = read_json(paths.meta_path)
         write_json(
@@ -78,17 +149,99 @@ class ImportExportService:
             },
         )
 
-    def overwrite_annotations(self, project: ProjectData, progress: ProgressCallback | None = None) -> None:
+    def import_event_validation_project(
+        self,
+        project: ProjectData,
+        progress: ProgressCallback | None = None,
+        should_cancel: CancelCallback | None = None,
+    ) -> None:
+        if project.uid is None:
+            raise UserVisibleError("Project UID is missing.")
+
+        paths = EventValidationPaths(self.data_dir, project.id)
+        paths.ensure_project_dir()
+
+        self.file_transfer.download(
+            project.uid,
+            paths.archive_path.name,
+            paths.archive_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.meta_path.name,
+            paths.meta_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.results_path.name,
+            paths.results_path,
+            progress=progress,
+            should_cancel=should_cancel,
+            ignore_404=True,
+        )
+        self._raise_if_cancelled(should_cancel)
+
+        if not paths.videos_dir.exists():
+            self.unzipper.unzip(
+                paths.archive_path,
+                paths.project_dir,
+                progress=progress,
+                should_cancel=should_cancel,
+            )
+            self._raise_if_cancelled(should_cancel)
+
+        self._build_event_validation_cache(paths)
+
+    def overwrite_annotations(
+        self,
+        project: ProjectData,
+        progress: ProgressCallback | None = None,
+        should_cancel: CancelCallback | None = None,
+    ) -> None:
         if project.mode is AnnotationMode.FILTERING:
-            raise UserVisibleError("Unable to overwrite annotations for filtering projects.")
+            raise UserVisibleError(
+                "Unable to overwrite annotations for filtering projects."
+            )
+
+        if project.mode is AnnotationMode.EVENT_VALIDATION:
+            self.overwrite_event_validation_project(project, progress, should_cancel)
+            return
 
         if project.uid is None:
             raise UserVisibleError("Project UID is missing.")
 
         paths = LabelingPaths(self.data_dir, project.id)
-        self.file_transfer.download(project.uid, paths.figures_path.name, paths.figures_path, progress=progress)
-        self.file_transfer.download(project.uid, paths.review_path.name, paths.review_path, progress=progress, ignore_404=True)
-        self.file_transfer.download(project.uid, paths.meta_path.name, paths.meta_path, progress=progress)
+        self.file_transfer.download(
+            project.uid,
+            paths.figures_path.name,
+            paths.figures_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.review_path.name,
+            paths.review_path,
+            progress=progress,
+            should_cancel=should_cancel,
+            ignore_404=True,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.meta_path.name,
+            paths.meta_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
 
         figures = read_json(paths.figures_path)
         if self._images_count(paths.images_dir) != len(figures):
@@ -97,6 +250,35 @@ class ImportExportService:
             )
 
         self._build_labeling_cache(paths)
+
+    def overwrite_event_validation_project(
+        self,
+        project: ProjectData,
+        progress: ProgressCallback | None = None,
+        should_cancel: CancelCallback | None = None,
+    ) -> None:
+        if project.uid is None:
+            raise UserVisibleError("Project UID is missing.")
+
+        paths = EventValidationPaths(self.data_dir, project.id)
+        self.file_transfer.download(
+            project.uid,
+            paths.meta_path.name,
+            paths.meta_path,
+            progress=progress,
+            should_cancel=should_cancel,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self.file_transfer.download(
+            project.uid,
+            paths.results_path.name,
+            paths.results_path,
+            progress=progress,
+            should_cancel=should_cancel,
+            ignore_404=True,
+        )
+        self._raise_if_cancelled(should_cancel)
+        self._build_event_validation_cache(paths)
 
     def export_figures(self, project: ProjectData) -> Path:
         paths = LabelingPaths(self.data_dir, project.id)
@@ -115,7 +297,9 @@ class ImportExportService:
         cache = self._read_cache(paths.cache_path)
 
         result = {"names": [], "ids": []}
-        for item in sorted(cache.get("items", []), key=lambda value: value.get("item_id", 0)):
+        for item in sorted(
+            cache.get("items", []), key=lambda value: value.get("item_id", 0)
+        ):
             if not item.get("selected"):
                 continue
 
@@ -127,11 +311,27 @@ class ImportExportService:
         write_json(paths.selected_frames_path, result)
         return paths.selected_frames_path
 
+    def export_event_validation_results(self, project: ProjectData) -> Path:
+        paths = EventValidationPaths(self.data_dir, project.id)
+        cache = self._read_cache(paths.cache_path)
+        result = {
+            "fields": list(cache.get("fields", {}).keys()),
+            "events": cache.get("events", {}),
+        }
+        write_json(paths.results_path, result)
+        return paths.results_path
+
     def export_results(self, project: ProjectData) -> list[Path]:
+        if project.mode is AnnotationMode.EVENT_VALIDATION:
+            return [self.export_event_validation_results(project)]
+
         if project.mode is AnnotationMode.FILTERING:
             return [self.export_selected_frames(project)]
 
-        return [self.export_figures(project), self.export_review_labels(project)]
+        if project.stage is AnnotationStage.REVIEW:
+            return [self.export_review_labels(project)]
+
+        return [self.export_figures(project)]
 
     def _build_labeling_cache(self, paths: LabelingPaths) -> None:
         if not is_valid_json(paths.meta_path):
@@ -142,14 +342,22 @@ class ImportExportService:
 
         meta = read_json(paths.meta_path)
         figures = read_json(paths.figures_path)
-        review = read_json(paths.review_path) if paths.review_path.exists() and is_valid_json(paths.review_path) else {}
+        review = (
+            read_json(paths.review_path)
+            if paths.review_path.exists() and is_valid_json(paths.review_path)
+            else {}
+        )
 
         labels = list(meta.get("labels", []))
         review_labels = list(meta.get("review_labels", []))
 
         labels = self._ensure_blur_label(labels)
 
-        image_names = sorted(name for name in os.listdir(paths.images_dir) if (paths.images_dir / name).is_file())
+        image_names = sorted(
+            name
+            for name in os.listdir(paths.images_dir)
+            if (paths.images_dir / name).is_file()
+        )
         items: list[dict[str, Any]] = []
 
         review_has_items = any(len(value) > 0 for value in review.values())
@@ -169,7 +377,9 @@ class ImportExportService:
                     "name": image_name,
                     "width": width,
                     "height": height,
-                    "requires_annotation": bool(review_items) if review_has_items else True,
+                    "requires_annotation": bool(review_items)
+                    if review_has_items
+                    else True,
                 }
             )
 
@@ -183,6 +393,41 @@ class ImportExportService:
                 "review": review,
             },
         )
+
+    def _build_event_validation_cache(self, paths: EventValidationPaths) -> None:
+        meta = read_json(paths.meta_path)
+        fields = {
+            item["question"]: {
+                answer: color
+                for answer, color in zip(
+                    item.get("answers", []), item.get("colors", [])
+                )
+            }
+            for item in meta
+        }
+        imported = (
+            read_json(paths.results_path)
+            if paths.results_path.exists() and is_valid_json(paths.results_path)
+            else {}
+        )
+        if imported and imported.get("fields") != list(fields.keys()):
+            raise UserVisibleError(
+                f"Task {paths.project_id}: Validation rules are different in "
+                "`event_validation_results.json` and `meta.json`. "
+                "Please reach out to Administrator to handle this issue."
+            )
+        events = {}
+        for video_path in sorted(paths.videos_dir.iterdir()):
+            if not video_path.is_file():
+                continue
+            uid = video_path.stem
+            imported_event = imported.get("events", {}).get(uid, {})
+            events[uid] = {
+                "answers": imported_event.get("answers", []),
+                "comment": imported_event.get("comment") or "",
+            }
+
+        write_json(paths.cache_path, {"fields": fields, "events": events})
 
     def _ensure_blur_label(self, labels: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if any(label.get("name") == "blur" for label in labels):
@@ -203,6 +448,10 @@ class ImportExportService:
         if not images_dir.exists():
             return 0
         return len([path for path in images_dir.iterdir() if path.is_file()])
+
+    def _raise_if_cancelled(self, should_cancel: CancelCallback | None) -> None:
+        if should_cancel is not None and should_cancel():
+            raise OperationCancelled("Operation cancelled.")
 
     def _read_cache(self, path: Path) -> dict[str, Any]:
         if not path.exists():

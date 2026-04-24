@@ -1,14 +1,15 @@
 import cv2
 import numpy as np
 
-from annotation_tool.annotation.figures import Figure, Point
+from annotation_tool.annotation.figures import AnnotationStyle, Figure, Point
+from annotation_tool.core.label_attributes import label_attributes_dict
 
 
 class KeypointGroup(Figure):
-    def __init__(self, label: str, keypoints: list[Point], attributes: dict | None = None) -> None:
+    def __init__(self, label: str, keypoints: list[Point], attributes=None) -> None:
         self.label = label
         self.keypoints = keypoints
-        self.attributes = attributes or {}
+        self.attributes = label_attributes_dict(attributes)
         self.selected = False
         self.active_point_id: int | None = None
         self.show_names = False
@@ -19,7 +20,7 @@ class KeypointGroup(Figure):
         start: Point,
         end: Point,
         label: str,
-        keypoint_template: dict,
+        keypoint_template,
     ) -> "KeypointGroup | None":
         if abs(start.x - end.x) < 3 or abs(start.y - end.y) < 3:
             return None
@@ -30,6 +31,7 @@ class KeypointGroup(Figure):
         width = abs(end.x - start.x)
         height = abs(end.y - start.y)
 
+        keypoint_template = label_attributes_dict(keypoint_template)
         keypoints = []
         for name, data in keypoint_template.get("keypoint_info", {}).items():
             rel_x = float(data.get("x", 0))
@@ -50,20 +52,39 @@ class KeypointGroup(Figure):
     def surface(self) -> int:
         return 1 if self.keypoints else 0
 
-    def draw(self, frame: np.ndarray, scale_factor: float, labels: dict | None = None) -> np.ndarray:
+    def draw(
+        self,
+        frame: np.ndarray,
+        scale_factor: float,
+        labels: dict | None = None,
+        style: AnnotationStyle | None = None,
+    ) -> np.ndarray:
+        style = style or AnnotationStyle()
         keypoints_by_name = {point.label: point for point in self.keypoints}
         connections = self.attributes.get("keypoint_connections", [])
         info = self.attributes.get("keypoint_info", {})
+        line_width = max(1, int(3 / max(scale_factor, 1) ** 0.33))
 
         for connection in connections:
             p1 = keypoints_by_name.get(connection.get("from"))
             p2 = keypoints_by_name.get(connection.get("to"))
             if p1 and p2:
-                cv2.line(frame, (p1.x, p1.y), (p2.x, p2.y), self._color(connection.get("color")), 2)
+                cv2.line(
+                    frame,
+                    (p1.x, p1.y),
+                    (p2.x, p2.y),
+                    self._color(connection.get("color")),
+                    line_width,
+                )
 
         for index, point in enumerate(self.keypoints):
             color = self._color(info.get(point.label, {}).get("color"))
-            radius = 6 if index == self.active_point_id else 4
+            radius = max(
+                1,
+                int(style.keypoint_handler_size / max(scale_factor, 1) ** 0.33),
+            )
+            if index == self.active_point_id:
+                radius += 1
             cv2.circle(frame, (point.x, point.y), radius, color, -1)
 
             if self.show_names and point.label:

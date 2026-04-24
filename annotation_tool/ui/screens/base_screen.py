@@ -19,6 +19,12 @@ class BaseProjectScreen(QWidget):
     def go_to_id(self, item_id: int) -> None:
         raise NotImplementedError
 
+    def reload_current_annotations(self) -> None:
+        """Re-read the current item from the repository without persisting
+        any in-memory edits first. Used after a download-and-overwrite so
+        the fresh annotations are not clobbered by a stale save."""
+        raise NotImplementedError
+
     def export_results(self) -> list:
         return []
 

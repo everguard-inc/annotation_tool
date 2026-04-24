@@ -1,6 +1,6 @@
 import time
 
-from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPoint, QTimer
 from PySide6.QtWidgets import QVBoxLayout
 
 from annotation_tool.media.image_converter import numpy_to_qimage
@@ -17,6 +17,8 @@ class LabelingScreen(BaseProjectScreen):
         self.session = session
         self.last_frame_switch_time = 0.0
         self.min_frame_switch_interval = 0.1
+        self.navigation_interval_ms = 100
+        self.held_navigation_key: str | None = None
         self.navigation_in_progress = False
 
         self.canvas = ImageCanvas(self)
@@ -33,6 +35,9 @@ class LabelingScreen(BaseProjectScreen):
         self.canvas.mouse_hovered.connect(self.handle_mouse_hover)
         self.canvas.key_pressed.connect(self.handle_key_press)
         self.canvas.key_released.connect(self.handle_key_release)
+
+        self.navigation_timer = QTimer(self)
+        self.navigation_timer.timeout.connect(self._repeat_navigation)
 
         self.refresh(fit=True)
 
@@ -62,6 +67,16 @@ class LabelingScreen(BaseProjectScreen):
         self.session.go_to_item(item_id)
         self.refresh(fit=True)
 
+    def reload_current_annotations(self) -> None:
+        self.session.reload_labels()
+        self.session.load_current_item()
+        self.refresh(fit=True)
+
+    def apply_annotation_style(self, style) -> None:
+        self.session.apply_annotation_style(style)
+        if self.session.item_count() > 0:
+            self.refresh()
+
     def show_classes(self) -> None:
         from annotation_tool.ui.widgets.classes_html import labels_to_html
         from annotation_tool.ui.widgets.html_window import HtmlWindow
@@ -75,7 +90,9 @@ class LabelingScreen(BaseProjectScreen):
         from annotation_tool.ui.widgets.classes_html import labels_to_html
         from annotation_tool.ui.widgets.html_window import HtmlWindow
 
-        html = labels_to_html("Review Labels", self.session.repository.get_review_labels())
+        html = labels_to_html(
+            "Review Labels", self.session.repository.get_review_labels()
+        )
         window = HtmlWindow("Review Labels", parent=self, html_content=html)
         window.show()
         self._review_labels_window = window
@@ -87,7 +104,12 @@ class LabelingScreen(BaseProjectScreen):
         return []
 
     def should_remove_after_completion(self) -> bool:
-        return False
+        from annotation_tool.core.enums import AnnotationStage
+
+        return (
+            self.session.project.stage is AnnotationStage.REVIEW
+            and self.session.repository.count_review_labels() == 0
+        )
 
     def handle_mouse_press(self, x: int, y: int) -> None:
         self.session.set_cursor(x, y)
@@ -108,12 +130,15 @@ class LabelingScreen(BaseProjectScreen):
         self.session.set_cursor(x, y)
         self.session.handle_mouse_hover(x, y)
         self.refresh()
+
     def handle_key_press(self, key: str) -> None:
         if key in {"w", "p", "q", "o"}:
             self.held_navigation_key = key
-
-            if not self.navigation_timer.isActive():
+            now = time.time()
+            if now - self.last_frame_switch_time >= self.min_frame_switch_interval:
                 self._repeat_navigation()
+                self.last_frame_switch_time = now
+            if not self.navigation_timer.isActive():
                 self.navigation_timer.start(self.navigation_interval_ms)
             return
 
@@ -130,7 +155,10 @@ class LabelingScreen(BaseProjectScreen):
         elif key == "escape":
             self.session.cancel_polygon()
         elif key == "a":
-            self.class_wheel.open_at(QPoint(self.session.cursor_x, self.session.cursor_y), self.session.labels())
+            self.class_wheel.open_at(
+                QPoint(self.session.cursor_x, self.session.cursor_y),
+                self.session.labels(),
+            )
             return
         elif key == "d":
             self.session.delete_selected()
@@ -174,14 +202,19 @@ class LabelingScreen(BaseProjectScreen):
             return
 
         if key == "a":
-            selected = self.class_wheel.selected_label(QPoint(self.session.cursor_x, self.session.cursor_y))
+            selected = self.class_wheel.selected_label(
+                QPoint(self.session.cursor_x, self.session.cursor_y)
+            )
             if selected is not None:
                 self.session.set_active_label_by_hotkey(selected.hotkey)
             self.class_wheel.close()
             self.refresh()
 
     def _repeat_navigation(self) -> None:
-        if getattr(self, "navigation_in_progress", False) or self.held_navigation_key is None:
+        if (
+            getattr(self, "navigation_in_progress", False)
+            or self.held_navigation_key is None
+        ):
             return
 
         self.navigation_in_progress = True

@@ -70,3 +70,21 @@ class FilteringPaths(ProjectPaths):
     @property
     def selected_frames_path(self) -> Path:
         return self.project_dir / "selected_frames.json"
+
+
+class EventValidationPaths(ProjectPaths):
+    @property
+    def archive_path(self) -> Path:
+        return self.project_dir / "archive.zip"
+
+    @property
+    def videos_dir(self) -> Path:
+        return self.project_dir / "videos"
+
+    @property
+    def images_dir(self) -> Path:
+        return self.project_dir / "images"
+
+    @property
+    def results_path(self) -> Path:
+        return self.project_dir / "event_validation_results.json"
