@@ -1,19 +1,37 @@
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QLabel, QMainWindow, QMessageBox
 
-from annotation_tool.core.exceptions import UserVisibleError
+from annotation_tool.annotation.figures import AnnotationStyle
+from annotation_tool.core.exceptions import (
+    BackendError,
+    OperationCancelled,
+    SettingsError,
+    UserVisibleError,
+)
 from annotation_tool.core.models import ProjectData
+from annotation_tool.core.paths import EventValidationPaths
 from annotation_tool.core.settings import AppSettings, SettingsStore
 from annotation_tool.infrastructure.api_client import ApiClient
 from annotation_tool.infrastructure.file_transfer import FileTransferClient
-from annotation_tool.infrastructure.repositories.project_repository import ProjectRepository
+from annotation_tool.infrastructure.repositories.event_validation_repository import (
+    EventValidationRepository,
+)
+from annotation_tool.infrastructure.repositories.project_repository import (
+    ProjectRepository,
+)
 from annotation_tool.infrastructure.unzip import ArchiveUnzipper
 from annotation_tool.services.completion_service import CompletionService
+from annotation_tool.services.event_validation_session import EventValidationSession
 from annotation_tool.services.import_export_service import ImportExportService
 from annotation_tool.services.project_service import ProjectService
+from annotation_tool.services.session_state import SessionStateStore
+from annotation_tool.services.statistics_service import StatisticsService
 from annotation_tool.ui.actions import AppActions
 from annotation_tool.ui.dialogs.error_dialog import ErrorDialog
 from annotation_tool.ui.dialogs.id_dialog import IdDialog
@@ -21,7 +39,7 @@ from annotation_tool.ui.dialogs.progress_dialog import ProgressDialog
 from annotation_tool.ui.dialogs.project_selector_dialog import ProjectSelectorDialog
 from annotation_tool.ui.dialogs.settings_dialog import SettingsDialog
 from annotation_tool.ui.screens.base_screen import BaseProjectScreen
-from annotation_tool.ui.screens.project_placeholder_screen import ProjectPlaceholderScreen
+from annotation_tool.ui.screens.event_validation_screen import EventValidationScreen
 from annotation_tool.ui.widgets.html_window import HtmlWindow
 
 
@@ -35,6 +53,7 @@ class MainWindow(QMainWindow):
         self.project_service: ProjectService | None = None
         self.completion_service: CompletionService | None = None
         self.import_export_service: ImportExportService | None = None
+        self._completed_project_cleanup_thread: threading.Thread | None = None
 
         self.current_project: ProjectData | None = None
         self.current_screen: BaseProjectScreen | None = None
@@ -42,8 +61,14 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("Annotation tool")
         self.resize(1200, 800)
+        self.setWindowState(self.windowState() | Qt.WindowState.WindowMaximized)
+
+        icon_path = Path(__file__).resolve().parents[2] / "icon.png"
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         self.placeholder = QLabel("No project opened", self)
+        self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.placeholder.setMinimumSize(600, 400)
         self.placeholder.setStyleSheet("font-size: 18px;")
         self.setCentralWidget(self.placeholder)
@@ -60,7 +85,11 @@ class MainWindow(QMainWindow):
                 QApplication.instance().quit()
                 raise SystemExit(0)
 
-        self.settings = self.settings_store.load()
+        try:
+            self.settings = self.settings_store.load()
+        except SettingsError as error:
+            ErrorDialog.show_error(str(error), self)
+            return
         self._build_services()
 
     def _build_services(self) -> None:
@@ -76,13 +105,16 @@ class MainWindow(QMainWindow):
             file_transfer=file_transfer,
             unzipper=ArchiveUnzipper(),
         )
-        self.project_service = ProjectService(self.api_client, repository, self.import_export_service)
+        self.project_service = ProjectService(
+            self.api_client, repository, self.import_export_service
+        )
         self.completion_service = CompletionService(
             self.api_client,
             repository,
             file_transfer=file_transfer,
             import_export_service=self.import_export_service,
         )
+        self._start_completed_project_cleanup()
 
     def set_current_project_title(self, project_id: int | None) -> None:
         if project_id is None:
@@ -107,8 +139,21 @@ class MainWindow(QMainWindow):
             return
 
         progress = self._progress("Opening project")
-        opened_project = self.project_service.open_project(project, progress=progress.update_progress)
-        progress.mark_complete()
+        try:
+            opened_project = self.project_service.open_project(
+                project,
+                progress=progress.update_progress,
+                should_cancel=progress.should_cancel,
+            )
+        except OperationCancelled:
+            progress.close()
+            return
+        except UserVisibleError as error:
+            progress.close()
+            ErrorDialog.show_error(str(error), self)
+            return
+        else:
+            progress.mark_complete()
 
         self._set_project_screen(opened_project)
 
@@ -118,7 +163,9 @@ class MainWindow(QMainWindow):
 
         projects = self.project_service.get_projects_from_backend()
         if not projects:
-            QMessageBox.information(self, "Projects", "No projects available for download.")
+            QMessageBox.information(
+                self, "Projects", "No projects available for download."
+            )
             return
 
         project = self._select_project(projects, "Download project")
@@ -126,11 +173,21 @@ class MainWindow(QMainWindow):
             return
 
         progress = self._progress("Downloading project")
-        self.project_service.download_project(project, progress=progress.update_progress)
-        progress.mark_complete()
-
-        opened_project = self.project_service.open_project(project)
-        self._set_project_screen(opened_project)
+        try:
+            self.project_service.download_project(
+                project,
+                progress=progress.update_progress,
+                should_cancel=progress.should_cancel,
+            )
+        except OperationCancelled:
+            progress.close()
+            return
+        except UserVisibleError as error:
+            progress.close()
+            ErrorDialog.show_error(str(error), self)
+            return
+        else:
+            progress.mark_complete()
 
     def remove_project(self) -> None:
         if self.project_service is None:
@@ -146,7 +203,9 @@ class MainWindow(QMainWindow):
         if project is None:
             return
 
-        agree = QMessageBox.question(self, "Remove project", f"Remove project {project.id} from this computer?")
+        agree = QMessageBox.question(
+            self, "Remove project", f"Remove project {project.id} from this computer?"
+        )
         if agree != QMessageBox.StandardButton.Yes:
             return
 
@@ -155,7 +214,9 @@ class MainWindow(QMainWindow):
         if self.current_project is not None and self.current_project.id == project.id:
             self._close_current_project()
 
-        QMessageBox.information(self, "Project removed", f"Project {project.id} removed.")
+        QMessageBox.information(
+            self, "Project removed", f"Project {project.id} removed."
+        )
 
     def go_to_id(self) -> None:
         if self.current_screen is None:
@@ -195,17 +256,26 @@ class MainWindow(QMainWindow):
                 project=self.current_project,
                 duration_hours=self.current_screen.duration_hours,
                 export_results=self.current_screen.export_results,
-                should_remove_after_completion=lambda _: self.current_screen.should_remove_after_completion(),
+                should_remove_after_completion=lambda _: (
+                    self.current_screen.should_remove_after_completion()
+                ),
             )
 
             self.current_project = completed_project
-            self._close_current_project()
+            self._discard_current_project_after_completion()
             QMessageBox.information(self, "Success", "Project completed.")
         except UserVisibleError as error:
             ErrorDialog.show_error(str(error), self)
 
     def overwrite_annotations(self) -> None:
         if self.current_project is None or self.project_service is None:
+            return
+
+        if self.api_client is not None and not self.api_client.is_available():
+            ErrorDialog.show_error(
+                "Backend is not reachable. Cannot download and overwrite annotations.",
+                self,
+            )
             return
 
         agree = QMessageBox.question(
@@ -218,11 +288,25 @@ class MainWindow(QMainWindow):
 
         try:
             progress = self._progress("Overwriting annotations")
-            self.project_service.overwrite_annotations(self.current_project, progress=progress.update_progress)
+            self.project_service.overwrite_annotations(
+                self.current_project,
+                progress=progress.update_progress,
+                should_cancel=progress.should_cancel,
+            )
             progress.mark_complete()
+            self._refresh_current_screen_after_overwrite()
             QMessageBox.information(self, "Success", "Annotations overwritten.")
+        except OperationCancelled:
+            progress.close()
+            return
         except UserVisibleError as error:
+            progress.close()
             ErrorDialog.show_error(str(error), self)
+
+    def _refresh_current_screen_after_overwrite(self) -> None:
+        if self.current_screen is None:
+            return
+        self.current_screen.reload_current_annotations()
 
     def open_settings(self) -> None:
         current_settings = self._safe_settings_for_dialog()
@@ -234,6 +318,12 @@ class MainWindow(QMainWindow):
         self.settings_store.save(dialog.settings())
         self.settings = self.settings_store.load()
         self._build_services()
+        if self.current_screen is not None and hasattr(
+            self.current_screen, "apply_annotation_style"
+        ):
+            self.current_screen.apply_annotation_style(
+                AnnotationStyle.from_settings(self.settings)
+            )
         self.statusBar().showMessage("Settings saved", 3000)
 
     def open_required_settings(self) -> bool:
@@ -270,7 +360,14 @@ class MainWindow(QMainWindow):
         commands = [
             ["git", "-C", str(root_path), "pull"],
             [str(python_path), "-m", "pip", "install", "--upgrade", "pip"],
-            [str(python_path), "-m", "pip", "install", "-r", str(root_path / "requirements.txt")],
+            [
+                str(python_path),
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                str(root_path / "requirements.txt"),
+            ],
         ]
 
         output_parts = []
@@ -312,7 +409,7 @@ class MainWindow(QMainWindow):
                     "Version=1.0",
                     "Type=Application",
                     "Name=EG Labeling",
-                    f"Exec=bash -c 'cd \"{root_path}\" && \"{python_path}\" -m annotation_tool'",
+                    f'Exec=bash -c \'cd "{root_path}" && "{python_path}" -m annotation_tool\'',
                     f"Icon={icon_path}",
                     "Terminal=false",
                     "StartupNotify=true",
@@ -331,11 +428,15 @@ class MainWindow(QMainWindow):
         self._show_html_window("Hotkeys", "hotkeys.html")
 
     def show_classes(self) -> None:
-        if self.current_screen is not None and hasattr(self.current_screen, "show_classes"):
+        if self.current_screen is not None and hasattr(
+            self.current_screen, "show_classes"
+        ):
             self.current_screen.show_classes()
 
     def show_review_labels(self) -> None:
-        if self.current_screen is not None and hasattr(self.current_screen, "show_review_labels"):
+        if self.current_screen is not None and hasattr(
+            self.current_screen, "show_review_labels"
+        ):
             self.current_screen.show_review_labels()
 
     def closeEvent(self, event) -> None:
@@ -343,22 +444,30 @@ class MainWindow(QMainWindow):
             self.current_screen.close_screen()
         event.accept()
 
-    def _select_project(self, projects: list[ProjectData], title: str) -> ProjectData | None:
+    def _select_project(
+        self, projects: list[ProjectData], title: str
+    ) -> ProjectData | None:
         dialog = ProjectSelectorDialog(projects, title, self)
         if dialog.exec() != ProjectSelectorDialog.DialogCode.Accepted:
             return None
         return dialog.selected_project()
 
     def _set_project_screen(self, project: ProjectData) -> None:
+        from annotation_tool.core.enums import AnnotationMode
+
         if self.current_screen is not None:
             self.current_screen.close_screen()
             self.current_screen.deleteLater()
 
         self.current_project = project
 
-        from annotation_tool.core.enums import AnnotationMode
-        from annotation_tool.infrastructure.repositories.filtering_repository import FilteringRepository
-        from annotation_tool.infrastructure.repositories.labeling_repository import LabelingRepository
+        from annotation_tool.core.paths import LabelingPaths
+        from annotation_tool.infrastructure.repositories.filtering_repository import (
+            FilteringRepository,
+        )
+        from annotation_tool.infrastructure.repositories.labeling_repository import (
+            LabelingRepository,
+        )
         from annotation_tool.media.video_frame_provider import VideoFrameProvider
         from annotation_tool.services.filtering_session import FilteringSession
         from annotation_tool.services.labeling_session import LabelingSession
@@ -370,8 +479,19 @@ class MainWindow(QMainWindow):
             AnnotationMode.SEGMENTATION,
             AnnotationMode.KEYPOINTS,
         }:
+            paths = LabelingPaths(self.settings.data_dir, project.id)
             repository = LabelingRepository(self.settings.data_dir, project.id)
-            session = LabelingSession(project, repository)
+            session_state_store = SessionStateStore(
+                paths.runtime_state_path, migration_db_path=paths.db_path
+            )
+            statistics_service = StatisticsService(paths.statistics_path)
+            session = LabelingSession(
+                project,
+                repository,
+                session_state_store,
+                statistics_service=statistics_service,
+                annotation_style=AnnotationStyle.from_settings(self.settings),
+            )
             self.current_screen = LabelingScreen(session, self)
 
         elif self.settings is not None and project.mode is AnnotationMode.FILTERING:
@@ -380,11 +500,42 @@ class MainWindow(QMainWindow):
             paths = FilteringPaths(self.settings.data_dir, project.id)
             repository = FilteringRepository(self.settings.data_dir, project.id)
             frame_provider = VideoFrameProvider(paths.video_path)
-            session = FilteringSession(frame_provider, repository)
-            self.current_screen = FilteringScreen(session, paths.selected_frames_path, self)
+            session_state_store = SessionStateStore(
+                paths.runtime_state_path, migration_db_path=paths.db_path
+            )
+            statistics_service = StatisticsService(paths.statistics_path)
+            session = FilteringSession(
+                frame_provider,
+                repository,
+                session_state_store=session_state_store,
+                statistics_service=statistics_service,
+            )
+            self.current_screen = FilteringScreen(
+                session, paths.selected_frames_path, self
+            )
+
+        elif (
+            self.settings is not None
+            and project.mode is AnnotationMode.EVENT_VALIDATION
+        ):
+            paths = EventValidationPaths(self.settings.data_dir, project.id)
+            repository = EventValidationRepository(self.settings.data_dir, project.id)
+            session_state_store = SessionStateStore(
+                paths.runtime_state_path, migration_db_path=paths.db_path
+            )
+            statistics_service = StatisticsService(paths.statistics_path)
+            session = EventValidationSession(
+                project,
+                repository,
+                session_state_store,
+                statistics_service=statistics_service,
+            )
+            self.current_screen = EventValidationScreen(
+                session, paths.results_path, self
+            )
 
         else:
-            self.current_screen = ProjectPlaceholderScreen(project, self)
+            raise UserVisibleError(f"Unsupported annotation mode: {project.mode.name}")
 
         self.setCentralWidget(self.current_screen)
         self.set_current_project_title(project.id)
@@ -394,9 +545,24 @@ class MainWindow(QMainWindow):
             self.current_screen.close_screen()
             self.current_screen.deleteLater()
 
+        self._clear_current_project_screen()
+
+    def _discard_current_project_after_completion(self) -> None:
+        # Completion already saved/exported/reset/removed the project. Calling the
+        # normal screen close path here would persist stale runtime state and can
+        # recreate a project directory that CompletionService just removed.
+        if self.current_screen is not None:
+            delete_later = getattr(self.current_screen, "deleteLater", None)
+            if delete_later is not None:
+                delete_later()
+
+        self._clear_current_project_screen()
+
+    def _clear_current_project_screen(self) -> None:
         self.current_project = None
         self.current_screen = None
         self.placeholder = QLabel("No project opened", self)
+        self.placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.placeholder.setStyleSheet("font-size: 18px;")
         self.setCentralWidget(self.placeholder)
         self.set_current_project_title(None)
@@ -413,6 +579,32 @@ class MainWindow(QMainWindow):
         window.show()
         self.html_windows.append(window)
 
+    def _start_completed_project_cleanup(self) -> None:
+        if self.project_service is None:
+            return
+        if (
+            self._completed_project_cleanup_thread is not None
+            and self._completed_project_cleanup_thread.is_alive()
+        ):
+            return
+        if not self.project_service.get_local_projects():
+            return
+
+        self._completed_project_cleanup_thread = threading.Thread(
+            target=self._remove_completed_local_projects,
+            daemon=True,
+        )
+        self._completed_project_cleanup_thread.start()
+
+    def _remove_completed_local_projects(self) -> None:
+        if self.project_service is None:
+            return
+
+        try:
+            self.project_service.remove_completed_local_projects()
+        except BackendError:
+            return
+
     def _progress(self, title: str) -> ProgressDialog:
         dialog = ProgressDialog(title, self)
         dialog.show()
@@ -421,7 +613,10 @@ class MainWindow(QMainWindow):
 
 
 def run_app() -> None:
-    from annotation_tool.ui.exception_hook import ErrorAwareApplication, install_exception_hooks
+    from annotation_tool.ui.exception_hook import (
+        ErrorAwareApplication,
+        install_exception_hooks,
+    )
 
     install_exception_hooks()
 

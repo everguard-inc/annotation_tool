@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from annotation_tool.annotation.figures import Figure, Point
+from annotation_tool.annotation.figures import AnnotationStyle, Figure, Point
 
 
 class BBox(Figure):
@@ -39,12 +39,30 @@ class BBox(Figure):
             Point(self.x1, self.y2),
         ]
 
-    def draw(self, frame: np.ndarray, scale_factor: float, labels: dict | None = None) -> np.ndarray:
+    def draw(
+        self,
+        frame: np.ndarray,
+        scale_factor: float,
+        labels: dict | None = None,
+        style: AnnotationStyle | None = None,
+    ) -> np.ndarray:
+        style = style or AnnotationStyle()
         color = self._color(labels)
-        line_width = max(1, int(3 / max(scale_factor, 1) ** 0.33))
+        line_width = max(1, int(style.bbox_line_width / max(scale_factor, 1) ** 0.33))
 
         if self.selected:
             line_width += 1
+
+        if style.color_fill_opacity > 0:
+            original = frame.copy()
+            cv2.rectangle(frame, (self.x1, self.y1), (self.x2, self.y2), color, -1)
+            frame = cv2.addWeighted(
+                frame,
+                style.color_fill_opacity,
+                original,
+                max(1 - style.color_fill_opacity, 0),
+                0,
+            )
 
         cv2.rectangle(frame, (self.x1, self.y1), (self.x2, self.y2), color, line_width)
 
@@ -66,7 +84,7 @@ class BBox(Figure):
             )
 
         if self.selected:
-            radius = max(2, int(4 / max(scale_factor, 1) ** 0.33))
+            radius = max(1, int(style.bbox_handler_size / max(scale_factor, 1) ** 0.33))
             for point in self.points:
                 cv2.circle(frame, (point.x, point.y), radius, (255, 255, 255), -1)
                 cv2.circle(frame, (point.x, point.y), radius, (0, 0, 0), 1)

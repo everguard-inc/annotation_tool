@@ -14,6 +14,27 @@ class Point:
         return abs(self.x - x) <= distance and abs(self.y - y) <= distance
 
 
+@dataclass(frozen=True)
+class AnnotationStyle:
+    bbox_line_width: float = 3.0
+    cursor_proximity_threshold: float = 3.0
+    objects_opacity: float = 0.9
+    color_fill_opacity: float = 0.1
+    bbox_handler_size: float = 3.0
+    keypoint_handler_size: float = 5.0
+
+    @classmethod
+    def from_settings(cls, settings) -> "AnnotationStyle":
+        return cls(
+            bbox_line_width=settings.bbox_line_width,
+            cursor_proximity_threshold=settings.cursor_proximity_threshold,
+            objects_opacity=settings.objects_opacity,
+            color_fill_opacity=settings.color_fill_opacity,
+            bbox_handler_size=settings.bbox_handler_size,
+            keypoint_handler_size=settings.keypoint_handler_size,
+        )
+
+
 class Figure(ABC):
     selected: bool = False
     active_point_id: int | None = None
@@ -29,7 +50,13 @@ class Figure(ABC):
         ...
 
     @abstractmethod
-    def draw(self, frame: np.ndarray, scale_factor: float, labels: dict | None = None) -> np.ndarray:
+    def draw(
+        self,
+        frame: np.ndarray,
+        scale_factor: float,
+        labels: dict | None = None,
+        style: AnnotationStyle | None = None,
+    ) -> np.ndarray:
         ...
 
     @abstractmethod

@@ -1,6 +1,8 @@
 import numpy as np
 
-from annotation_tool.infrastructure.repositories.filtering_repository import FilteringRepository
+from annotation_tool.infrastructure.repositories.filtering_repository import (
+    FilteringRepository,
+)
 from annotation_tool.services.filtering_session import FilteringSession
 
 
@@ -31,7 +33,9 @@ class FakeDecoder:
         return f"frame_{value}.jpg"
 
 
-def test_filtering_session_navigates_and_tracks_selected_items(data_dir, filtering_project, filtering_paths) -> None:
+def test_filtering_session_navigates_and_tracks_selected_items(
+    data_dir, filtering_project, filtering_paths
+) -> None:
     """Covers FR-155, FR-156, FR-157, FR-158, FR-159."""
     repository = FilteringRepository(data_dir, filtering_project.id)
     provider = FakeFrameProvider()
@@ -56,3 +60,33 @@ def test_filtering_session_navigates_and_tracks_selected_items(data_dir, filteri
     assert session.current_item_id() == 1
 
     assert provider.prefetched
+
+
+def test_filtering_session_navigates_selected_in_frame_order_after_out_of_order_toggles(
+    data_dir, filtering_project, filtering_paths
+) -> None:
+    """Regression for the filtering migrator rewrite dropping the sorted()
+    wrapper on list_selected(). If items are toggled out of frame order,
+    list_selected() must still return them in ascending item_id order so
+    go_to_next_selected / go_to_previous_selected land on the expected
+    frame."""
+    repository = FilteringRepository(data_dir, filtering_project.id)
+    provider = FakeFrameProvider()
+    session = FilteringSession(provider, repository, FakeDecoder())
+
+    session.go_to_item(3)
+    session.toggle_selected()
+    session.go_to_item(0)
+    session.toggle_selected()
+    session.go_to_item(2)
+    session.toggle_selected()
+
+    assert [item_id for item_id, _ in repository.list_selected()] == [0, 2, 3]
+
+    session.go_to_item(1)
+    session.go_to_next_selected()
+    assert session.current_item_id() == 2
+
+    session.go_to_item(4)
+    session.go_to_previous_selected()
+    assert session.current_item_id() == 3

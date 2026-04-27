@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from annotation_tool.core.enums import AnnotationMode, AnnotationStage
+from annotation_tool.core.models import ProjectData
 from annotation_tool.core.paths import FilteringPaths, LabelingPaths
 from annotation_tool.core.utils import read_json, write_json
 from annotation_tool.services.import_export_service import ImportExportService
@@ -60,3 +62,31 @@ def test_export_writes_labeling_annotations_and_selected_filtering_frames(
     assert read_json(figures_path)["img1.jpg"]["masks"] == {"road": "0:10"}
     assert read_json(review_path)["img1.jpg"][0]["label"] == "Fix"
     assert read_json(selected_path) == {"names": ["a.jpg"], "ids": [2]}
+
+
+def test_labeling_export_results_matches_tk_stage_specific_upload_contract(
+    data_dir: Path,
+    labeling_project,
+) -> None:
+    service = ImportExportService(data_dir=data_dir, file_transfer=UnusedFileTransfer())
+    paths = LabelingPaths(data_dir, labeling_project.id)
+    paths.ensure_project_dir()
+    write_json(
+        paths.cache_path,
+        {
+            "figures": {"img1.jpg": {"bboxes": [], "masks": {}, "kgroups": []}},
+            "review": {"img1.jpg": [{"label": "Fix", "x": 1, "y": 2}]},
+        },
+    )
+    review_project = ProjectData(
+        id=labeling_project.id,
+        uid=labeling_project.uid,
+        stage=AnnotationStage.REVIEW,
+        mode=AnnotationMode.OBJECT_DETECTION,
+    )
+
+    annotate_result = service.export_results(labeling_project)
+    review_result = service.export_results(review_project)
+
+    assert annotate_result == [paths.figures_path]
+    assert review_result == [paths.review_path]

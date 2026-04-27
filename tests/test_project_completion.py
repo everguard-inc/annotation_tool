@@ -7,6 +7,7 @@ from annotation_tool.core.exceptions import BackendError
 from annotation_tool.core.models import ProjectData
 from annotation_tool.infrastructure.repositories.project_repository import ProjectRepository
 from annotation_tool.services.completion_service import CompletionService
+from annotation_tool.ui.screens.labeling_screen import LabelingScreen
 
 
 class CompletionApi:
@@ -30,17 +31,35 @@ class FakeFileTransfer:
 
 
 @pytest.mark.parametrize(
-    ("initial_stage", "expected_stage"),
+    ("initial_stage", "mode", "expected_stage"),
     [
-        (AnnotationStage.ANNOTATE, AnnotationStage.SENT_FOR_REVIEW),
-        (AnnotationStage.CORRECTION, AnnotationStage.SENT_FOR_REVIEW),
-        (AnnotationStage.REVIEW, AnnotationStage.SENT_FOR_CORRECTION),
-        (AnnotationStage.FILTERING, AnnotationStage.DONE),
+        (
+            AnnotationStage.ANNOTATE,
+            AnnotationMode.OBJECT_DETECTION,
+            AnnotationStage.SENT_FOR_REVIEW,
+        ),
+        (
+            AnnotationStage.CORRECTION,
+            AnnotationMode.OBJECT_DETECTION,
+            AnnotationStage.SENT_FOR_REVIEW,
+        ),
+        (
+            AnnotationStage.REVIEW,
+            AnnotationMode.OBJECT_DETECTION,
+            AnnotationStage.SENT_FOR_CORRECTION,
+        ),
+        (AnnotationStage.FILTERING, AnnotationMode.FILTERING, AnnotationStage.DONE),
+        (
+            AnnotationStage.EVENT_VALIDATION,
+            AnnotationMode.EVENT_VALIDATION,
+            AnnotationStage.DONE,
+        ),
     ],
 )
 def test_completion_service_changes_stage_and_calls_backend(
     tmp_path: Path,
     initial_stage: AnnotationStage,
+    mode: AnnotationMode,
     expected_stage: AnnotationStage,
 ) -> None:
     """Covers FR-029, FR-030, FR-031, FR-032, FR-033, FR-034, FR-035, FR-036, FR-096, FR-097, FR-098, FR-166, FR-179, FR-180."""
@@ -48,7 +67,7 @@ def test_completion_service_changes_stage_and_calls_backend(
         id=12,
         uid="uid-12",
         stage=initial_stage,
-        mode=AnnotationMode.OBJECT_DETECTION,
+        mode=mode,
     )
     repository = ProjectRepository(tmp_path)
     repository.create_local_project(project)
@@ -98,3 +117,23 @@ def test_completion_service_blocks_completion_when_backend_is_unavailable(tmp_pa
         service.complete_current_project(project=project, duration_hours=1.0)
 
     assert repository.load_state(project.id).stage is AnnotationStage.ANNOTATE
+
+
+def test_labeling_review_screen_removes_project_when_no_review_labels_remain() -> None:
+    class FakeRepository:
+        def count_review_labels(self) -> int:
+            return 0
+
+    class FakeSession:
+        project = ProjectData(
+            id=14,
+            uid="uid-14",
+            stage=AnnotationStage.REVIEW,
+            mode=AnnotationMode.OBJECT_DETECTION,
+        )
+        repository = FakeRepository()
+
+    screen = LabelingScreen.__new__(LabelingScreen)
+    screen.session = FakeSession()
+
+    assert screen.should_remove_after_completion() is True

@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from annotation_tool.annotation.figures import Figure, Point
+from annotation_tool.annotation.figures import AnnotationStyle, Figure, Point
 
 
 class ReviewLabel(Figure):
@@ -20,7 +20,13 @@ class ReviewLabel(Figure):
     def surface(self) -> int:
         return 1
 
-    def draw(self, frame: np.ndarray, scale_factor: float, labels: dict | None = None) -> np.ndarray:
+    def draw(
+        self,
+        frame: np.ndarray,
+        scale_factor: float,
+        labels: dict | None = None,
+        style: AnnotationStyle | None = None,
+    ) -> np.ndarray:
         color = labels.get(self.label, (0, 255, 255)) if labels else (0, 255, 255)
         cv2.circle(frame, (self.x, self.y), 5, color, -1)
         cv2.line(frame, (self.x, self.y), (self.x + 30, self.y - 30), (255, 255, 255), 2)

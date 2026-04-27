@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-from annotation_tool.annotation.figures import Figure, Point
+from annotation_tool.annotation.figures import AnnotationStyle, Figure, Point
 
 
 class Mask(Figure):
@@ -29,11 +29,24 @@ class Mask(Figure):
     def remove_polygon(self, points: list[tuple[int, int]]) -> None:
         self._fill(points, value=0)
 
-    def draw(self, frame: np.ndarray, scale_factor: float, labels: dict | None = None) -> np.ndarray:
+    def draw(
+        self,
+        frame: np.ndarray,
+        scale_factor: float,
+        labels: dict | None = None,
+        style: AnnotationStyle | None = None,
+    ) -> np.ndarray:
+        style = style or AnnotationStyle()
         color = labels.get(self.label, (0, 255, 255)) if labels else (0, 255, 255)
         overlay = frame.copy()
         overlay[self.mask > 0] = color
-        return cv2.addWeighted(overlay, 0.5, frame, 0.5, 0)
+        return cv2.addWeighted(
+            overlay,
+            style.color_fill_opacity,
+            frame,
+            max(1 - style.color_fill_opacity, 0),
+            0,
+        )
 
     def contains_point(self, point: Point) -> bool:
         if point.y < 0 or point.x < 0 or point.y >= self.mask.shape[0] or point.x >= self.mask.shape[1]:

@@ -44,7 +44,7 @@ class LabelData:
     color: str
     hotkey: str
     type: FigureType
-    attributes: dict[str, Any] | None = None
+    attributes: Any = None
 
 
 @dataclass

@@ -18,6 +18,8 @@ class FakeResponse:
 
 
 def test_api_client_get_projects_filters_unassigned_projects(monkeypatch) -> None:
+    """Covers FR-176, FR-177, FR-178."""
+
     def fake_post(url, json, timeout):
         assert url == "https://api.example.com/api/annotation/projects_data/"
         assert json == {"user_token": "token"}
@@ -43,7 +45,9 @@ def test_api_client_get_projects_filters_unassigned_projects(monkeypatch) -> Non
             },
         )
 
-    monkeypatch.setattr("annotation_tool.infrastructure.api_client.requests.post", fake_post)
+    monkeypatch.setattr(
+        "annotation_tool.infrastructure.api_client.requests.post", fake_post
+    )
 
     projects = ApiClient("https://api.example.com", "token").get_projects()
 
@@ -54,10 +58,14 @@ def test_api_client_get_projects_filters_unassigned_projects(monkeypatch) -> Non
 
 
 def test_api_client_raises_backend_error_on_non_200(monkeypatch) -> None:
+    """Covers FR-032."""
+
     def fake_post(url, json, timeout):
         return FakeResponse(500, {"error": "server exploded"})
 
-    monkeypatch.setattr("annotation_tool.infrastructure.api_client.requests.post", fake_post)
+    monkeypatch.setattr(
+        "annotation_tool.infrastructure.api_client.requests.post", fake_post
+    )
 
     with pytest.raises(BackendError, match="Backend error 500"):
         ApiClient("https://api.example.com", "token").complete_task("project-uid", 1.5)

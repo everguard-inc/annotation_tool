@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 from annotation_tool.annotation.bboxes import BBox
-from annotation_tool.annotation.figures import Figure, Point
+from annotation_tool.annotation.figures import AnnotationStyle, Figure, Point
 from annotation_tool.annotation.keypoints import KeypointGroup
 from annotation_tool.annotation.review_labels import ReviewLabel
 from annotation_tool.annotation.segmentation import Mask
@@ -42,9 +42,15 @@ class History:
 
 
 class FigureController:
-    def __init__(self, mode: AnnotationMode, active_label: LabelData | None = None) -> None:
+    def __init__(
+        self,
+        mode: AnnotationMode,
+        active_label: LabelData | None = None,
+        annotation_style: AnnotationStyle | None = None,
+    ) -> None:
         self.mode = mode
         self.active_label = active_label
+        self.annotation_style = annotation_style or AnnotationStyle()
         self._figures: list[Figure] = []
         self.buffer: list[Figure] = []
         self.history = History()
@@ -107,6 +113,10 @@ class FigureController:
 
         if self.controller_mode is ControllerMode.MOVING and self.selected_index is not None:
             self._figures[self.selected_index].move_active_point(x, y)
+            return
+
+        if self.controller_mode is ControllerMode.CREATE and self.start_point:
+            self.preview = self._create_figure(self.start_point, Point(x, y))
 
     def handle_mouse_release(self, x: int, y: int) -> None:
         self.cursor = Point(x, y)
@@ -191,12 +201,17 @@ class FigureController:
         self.shift_mode = enabled
 
     def draw_overlay(self, frame: np.ndarray, scale_factor: float, label_colors: dict | None = None) -> np.ndarray:
+        original = frame.copy()
         figures = sorted(self._figures, key=lambda figure: figure.surface, reverse=True)
         for figure in figures:
-            frame = figure.draw(frame, scale_factor, label_colors)
+            frame = figure.draw(
+                frame, scale_factor, label_colors, self.annotation_style
+            )
 
         if self.preview is not None:
-            frame = self.preview.draw(frame, scale_factor, label_colors)
+            frame = self.preview.draw(
+                frame, scale_factor, label_colors, self.annotation_style
+            )
 
         if self.mode is AnnotationMode.SEGMENTATION and self.polygon:
             color = (0, 0, 255) if self.shift_mode else (255, 255, 255)
@@ -207,7 +222,13 @@ class FigureController:
 
             cv2.circle(frame, self.polygon[0], 4, color, 1)
 
-        return frame
+        return cv2.addWeighted(
+            frame,
+            self.annotation_style.objects_opacity,
+            original,
+            max(1 - self.annotation_style.objects_opacity, 0),
+            0,
+        )
 
     def update_selection(self, x: int, y: int) -> None:
         for figure in self._figures:
@@ -245,7 +266,9 @@ class FigureController:
         point = Point(x, y)
 
         for index, figure in sorted(enumerate(self._figures), key=lambda item: item[1].surface):
-            point_id = figure.find_nearest_point_index(x, y)
+            point_id = figure.find_nearest_point_index(
+                x, y, self.annotation_style.cursor_proximity_threshold
+            )
             if point_id is not None:
                 return index, point_id
             if figure.contains_point(point):

@@ -44,7 +44,15 @@ class VideoFrameProvider(QObject):
         return frame
 
     def prefetch(self, start_index: int, direction: int) -> None:
-        return None
+        if direction == 0 or self._frame_count <= 0:
+            return
+        target = self._normalize_index(start_index + direction)
+        if target == start_index:
+            return
+        if self.cache.get(target) is not None:
+            return
+        frame = self._read_frame(target)
+        self.cache.put(target, frame)
 
     def get_cached(self, index: int) -> np.ndarray | None:
         return self.cache.get(index)

@@ -4,6 +4,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QVBoxLayout
 
 from annotation_tool.core.enums import FilteringDelay
+from annotation_tool.core.utils import write_json
 from annotation_tool.media.image_converter import numpy_to_qimage
 from annotation_tool.services.filtering_session import FilteringSession
 from annotation_tool.ui.screens.base_screen import BaseProjectScreen
@@ -12,7 +13,9 @@ from annotation_tool.ui.widgets.status_bar_filtering import FilteringStatusBar
 
 
 class FilteringScreen(BaseProjectScreen):
-    def __init__(self, session: FilteringSession, selected_frames_path: Path, parent=None) -> None:
+    def __init__(
+        self, session: FilteringSession, selected_frames_path: Path, parent=None
+    ) -> None:
         super().__init__(parent)
         self.session = session
         self.selected_frames_path = selected_frames_path
@@ -62,6 +65,10 @@ class FilteringScreen(BaseProjectScreen):
         self.session.go_to_item(item_id)
         self.refresh(fit=True)
 
+    def reload_current_annotations(self) -> None:
+        self.session.load_current_item()
+        self.refresh(fit=True)
+
     def toggle_selected(self) -> None:
         self.session.toggle_selected()
         self.refresh()
@@ -70,10 +77,19 @@ class FilteringScreen(BaseProjectScreen):
         self.session.save_current_item()
         if hasattr(self.session.repository, "flush"):
             self.session.repository.flush()
+        result = {"names": [], "ids": []}
+        for item in self.session.repository.list_items():
+            if not item.get("selected"):
+                continue
+            if item.get("name"):
+                result["names"].append(item["name"])
+            elif item.get("item_id") is not None:
+                result["ids"].append(item["item_id"])
+        write_json(self.selected_frames_path, result)
         return [self.selected_frames_path]
 
     def should_remove_after_completion(self) -> bool:
-        return False
+        return True
 
     def handle_key_press(self, key: str) -> None:
         if key in {"w", "p", "q", "o"}:

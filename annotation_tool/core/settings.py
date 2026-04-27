@@ -60,7 +60,14 @@ class SettingsStore:
             raise SettingsError(f"Missing required settings: {', '.join(missing)}")
 
         data_dir = Path(data_dir_raw).expanduser()
-        data_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            self._clear_data_dir(data)
+            raise SettingsError(
+                f"Unable to create data_dir '{data_dir_raw}': {error}. "
+                "The invalid value has been cleared; please set a valid data_dir."
+            ) from error
 
         return AppSettings(
             token=token,
@@ -68,11 +75,19 @@ class SettingsStore:
             file_url=file_url,
             data_dir=data_dir,
             bbox_line_width=float(self._value(data, "interface", "bbox_line_width")),
-            cursor_proximity_threshold=float(self._value(data, "interface", "cursor_proximity_threshold")),
+            cursor_proximity_threshold=float(
+                self._value(data, "interface", "cursor_proximity_threshold")
+            ),
             objects_opacity=float(self._value(data, "interface", "objects_opacity")),
-            color_fill_opacity=float(self._value(data, "interface", "color_fill_opacity")),
-            bbox_handler_size=float(self._value(data, "interface", "bbox_handler_size")),
-            keypoint_handler_size=float(self._value(data, "interface", "keypoint_handler_size")),
+            color_fill_opacity=float(
+                self._value(data, "interface", "color_fill_opacity")
+            ),
+            bbox_handler_size=float(
+                self._value(data, "interface", "bbox_handler_size")
+            ),
+            keypoint_handler_size=float(
+                self._value(data, "interface", "keypoint_handler_size")
+            ),
         )
 
     def save(self, settings: AppSettings) -> None:
@@ -84,17 +99,27 @@ class SettingsStore:
         data["general"]["data_dir"]["value"] = str(settings.data_dir).strip()
 
         data["interface"]["bbox_line_width"]["value"] = settings.bbox_line_width
-        data["interface"]["cursor_proximity_threshold"]["value"] = settings.cursor_proximity_threshold
+        data["interface"]["cursor_proximity_threshold"]["value"] = (
+            settings.cursor_proximity_threshold
+        )
         data["interface"]["objects_opacity"]["value"] = settings.objects_opacity
         data["interface"]["color_fill_opacity"]["value"] = settings.color_fill_opacity
         data["interface"]["bbox_handler_size"]["value"] = settings.bbox_handler_size
-        data["interface"]["keypoint_handler_size"]["value"] = settings.keypoint_handler_size
+        data["interface"]["keypoint_handler_size"]["value"] = (
+            settings.keypoint_handler_size
+        )
 
         write_json(self.path, data)
         self.path.chmod(0o600)
 
     def has_empty_required_values(self) -> bool:
         return bool(self.missing_required_values(self._merged_data()))
+
+    def _clear_data_dir(self, data: dict[str, Any]) -> None:
+        data.setdefault("general", {}).setdefault(
+            "data_dir", {"type": "string", "value": ""}
+        )["value"] = ""
+        write_json(self.path, data)
 
     def missing_required_values(self, data: dict[str, Any] | None = None) -> list[str]:
         data = data or self._merged_data()
@@ -113,13 +138,24 @@ class SettingsStore:
             token=str(self._value(data, "general", "token")),
             api_url=str(self._value(data, "general", "api_url")),
             file_url=str(self._value(data, "general", "file_url")),
-            data_dir=Path(str(self._value(data, "general", "data_dir")) or str(Path.home() / "annotation")),
+            data_dir=Path(
+                str(self._value(data, "general", "data_dir"))
+                or str(Path.home() / "annotation")
+            ),
             bbox_line_width=float(self._value(data, "interface", "bbox_line_width")),
-            cursor_proximity_threshold=float(self._value(data, "interface", "cursor_proximity_threshold")),
+            cursor_proximity_threshold=float(
+                self._value(data, "interface", "cursor_proximity_threshold")
+            ),
             objects_opacity=float(self._value(data, "interface", "objects_opacity")),
-            color_fill_opacity=float(self._value(data, "interface", "color_fill_opacity")),
-            bbox_handler_size=float(self._value(data, "interface", "bbox_handler_size")),
-            keypoint_handler_size=float(self._value(data, "interface", "keypoint_handler_size")),
+            color_fill_opacity=float(
+                self._value(data, "interface", "color_fill_opacity")
+            ),
+            bbox_handler_size=float(
+                self._value(data, "interface", "bbox_handler_size")
+            ),
+            keypoint_handler_size=float(
+                self._value(data, "interface", "keypoint_handler_size")
+            ),
         )
 
     def _merged_data(self) -> dict[str, Any]:

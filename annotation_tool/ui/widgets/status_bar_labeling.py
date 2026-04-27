@@ -1,4 +1,5 @@
-from PySide6.QtWidgets import QLabel, QProgressBar, QWidget, QHBoxLayout
+from PySide6.QtGui import QFont, QResizeEvent
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QProgressBar, QWidget
 
 from annotation_tool.core.models import LabelingStatusData
 
@@ -36,7 +37,9 @@ class LabelingStatusBar(QWidget):
     def update_status(self, status: LabelingStatusData) -> None:
         percent = int((status.item_id + 1) / max(status.items_count, 1) * 100)
 
-        self.mode_label.setText(f"Mode: {status.annotation_mode}: {status.annotation_stage}")
+        self.mode_label.setText(
+            f"Mode: {status.annotation_mode}: {status.annotation_stage}"
+        )
         self.class_label.setText(f"Class: {status.selected_class}")
         self.trash_label.setText("Trash" if status.is_trash else "not Trash")
 
@@ -50,6 +53,25 @@ class LabelingStatusBar(QWidget):
         self.hidden_label.setText(hidden_text)
         self.item_id_label.setText(f"Img id: {status.item_id}")
         self.speed_label.setText(f"Speed: {status.speed_per_hour} img/hour")
-        self.processed_label.setText(f"Position: {percent} % ({status.item_id + 1}/{status.items_count})")
+        self.processed_label.setText(
+            f"Position: {percent} % ({status.item_id + 1}/{status.items_count})"
+        )
         self.progress_bar.setValue(percent)
         self.duration_label.setText(f"Duration: {status.duration_hours:.2f} hours")
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        size = max(8, min(15, int(self.width() / 130)))
+        for label in (
+            self.mode_label,
+            self.class_label,
+            self.trash_label,
+            self.hidden_label,
+            self.item_id_label,
+            self.speed_label,
+            self.processed_label,
+            self.duration_label,
+        ):
+            font = QFont(label.font())
+            font.setPointSize(size)
+            label.setFont(font)

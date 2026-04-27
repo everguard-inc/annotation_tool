@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -11,8 +12,10 @@ def read_json(path: Path) -> Any:
 
 def write_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
+    tmp = path.parent / (path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as file:
         json.dump(value, file, indent=4)
+    os.replace(tmp, path)
 
 
 def is_valid_json(path: Path) -> bool:

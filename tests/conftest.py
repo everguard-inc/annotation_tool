@@ -174,7 +174,7 @@ def filtering_video_path(filtering_paths: FilteringPaths) -> Path:
     )
 
     assert writer.isOpened()
-    
+
     for index in range(4):
         frame = np.zeros((24, 32, 3), dtype=np.uint8)
         frame[:, :] = index * 40
