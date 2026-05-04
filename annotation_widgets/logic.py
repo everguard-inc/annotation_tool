@@ -75,7 +75,7 @@ class AbstractAnnotationLogic(ABC):
             interval = curr_time - self.tick_time
             if interval > 1:
                 with open(self.pm.statistics_path, 'a+') as file:
-                    file.write(f"{self.project_data.stage.name},{get_datetime_str()},{message},{self.duration_hours}\n")
+                    file.write(f"{self.project_data.stage.name},{get_datetime_str()},{message},{self.duration_hours},{interval},{self.max_action_time_sec}\n")
                 step_duration = min(interval, self.max_action_time_sec)
                 self.tick_time = curr_time
                 self.duration_hours += step_duration / 3600
