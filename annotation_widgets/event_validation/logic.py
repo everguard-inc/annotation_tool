@@ -257,6 +257,7 @@ class EventValidationLogic(AbstractImageAnnotationLogic):
         elif key.lower() == "s":  # Switch to VIDEO mode
             if not self.video_mode:
                 self.change_view_mode(EventViewMode.VIDEO)
+                self.set_video_cap()
                 self.load_video_frame(frame_number=self.current_frame_number)
         elif key.lower() == "z":
             if self.video_mode:
