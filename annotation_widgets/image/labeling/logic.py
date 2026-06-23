@@ -35,6 +35,8 @@ class StatusData:
     number_of_items: int
     figures_hidden: bool
     review_labels_hidden: bool
+    bbox_count: int
+    kgroup_count: int
 
 
 class ImageLabelingLogic(AbstractImageAnnotationLogic):
@@ -107,6 +109,18 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
     def status_data(self):
         number_of_processed = len(self.processed_item_ids)
         active_label = self.controller.active_label
+
+        # Count bboxes and kgroups
+        # In Review mode: count from self.figures (the annotations being reviewed)
+        # In Annotation mode: count from self.controller.figures (the annotations being edited)
+        if self.project_data.stage is AnnotationStage.REVIEW:
+            figures_to_count = self.figures
+        else:
+            figures_to_count = self.controller.figures
+
+        bbox_count = sum(1 for fig in figures_to_count if fig.figure_type == FigureType.BBOX.name)
+        kgroup_count = sum(1 for fig in figures_to_count if fig.figure_type == FigureType.KGROUP.name)
+
         return StatusData(
             selected_class=f"{active_label.name}: {active_label.type} [{active_label.hotkey}]",
             class_color=active_label.color,
@@ -120,6 +134,8 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
             number_of_items=len(self.img_names),
             figures_hidden=self.hide_figures,
             review_labels_hidden=self.hide_review_labels,
+            bbox_count=bbox_count,
+            kgroup_count=kgroup_count,
         )
 
     @property
