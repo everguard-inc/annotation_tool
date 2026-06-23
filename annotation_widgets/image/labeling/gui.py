@@ -7,7 +7,7 @@ from tkinter import font, ttk
 
 
 
-class AnnotationStatusBar(tk.Frame): 
+class AnnotationStatusBar(tk.Frame):
     def __init__(self, parent, logic: ImageLabelingLogic, **kw):
         super().__init__(parent, **kw)
         self.logic: ImageLabelingLogic = logic
@@ -19,6 +19,7 @@ class AnnotationStatusBar(tk.Frame):
         self.hidden_label = tk.Label(self, bd=1)
         self.item_id_label = tk.Label(self, bd=1)
         self.speed_label = tk.Label(self, bd=1)
+        self.count_label = tk.Label(self, bd=1)
         self.processed_label = tk.Label(self, bd=1)
         self.progress_bar = ttk.Progressbar(self, orient="horizontal", mode="determinate")
         self.duration_label = tk.Label(self, bd=1)
@@ -57,18 +58,22 @@ class AnnotationStatusBar(tk.Frame):
         sep6 = ttk.Separator(self, orient='vertical')
         sep6.grid(row=0, column=11, sticky='ns')
 
-        self.processed_label.grid(row=0, column=12, sticky='ew', padx=15)
+        self.count_label.grid(row=0, column=12, sticky='ew', padx=15)
         sep7 = ttk.Separator(self, orient='vertical')
         sep7.grid(row=0, column=13, sticky='ns')
 
-        self.progress_bar.grid(row=0, column=14, sticky='ew', padx=15)
-        self.columnconfigure(14, weight=1)  # Make progress bar expand
+        self.processed_label.grid(row=0, column=14, sticky='ew', padx=15)
         sep8 = ttk.Separator(self, orient='vertical')
         sep8.grid(row=0, column=15, sticky='ns')
 
-        self.duration_label.grid(row=0, column=16, sticky='ew', padx=15)
+        self.progress_bar.grid(row=0, column=16, sticky='ew', padx=15)
+        self.columnconfigure(16, weight=1)  # Make progress bar expand
         sep9 = ttk.Separator(self, orient='vertical')
         sep9.grid(row=0, column=17, sticky='ns')
+
+        self.duration_label.grid(row=0, column=18, sticky='ew', padx=15)
+        sep10 = ttk.Separator(self, orient='vertical')
+        sep10.grid(row=0, column=19, sticky='ns')
 
     def on_resize(self, event):
         # Calculate an appropriate font size based on the current width
@@ -77,7 +82,8 @@ class AnnotationStatusBar(tk.Frame):
 
         # Set the new font to all labels and progress bar
         for widget in [self.mode_label, self.class_label, self.trash_label, self.hidden_label,
-                       self.item_id_label, self.speed_label, self.processed_label, self.duration_label]:
+                       self.item_id_label, self.speed_label, self.count_label, self.processed_label,
+                       self.duration_label]:
             widget.config(font=label_font)
 
     def update_status(self):
@@ -99,6 +105,7 @@ class AnnotationStatusBar(tk.Frame):
 
         self.item_id_label.config(text=f"Img id: {status_data.item_id}")
         self.speed_label.config(text=f"Speed: {status_data.speed_per_hour} img/hour")
+        self.count_label.config(text=f"bb: {status_data.bbox_count} kp: {status_data.kgroup_count}")
 
         position_percent = int((status_data.item_id + 1) / status_data.number_of_items * 100)
         self.processed_label.config(text=f"Position: {position_percent} % ({status_data.item_id + 1}/{status_data.number_of_items})")
