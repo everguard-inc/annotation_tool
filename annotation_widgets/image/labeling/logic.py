@@ -460,6 +460,27 @@ class ImageLabelingLogic(AbstractImageAnnotationLogic):
         self.controller.take_snapshot()
         self.item_changed = True
 
+    def carry_hovered_bbox_forward(self) -> bool:
+        """Copy the bbox under cursor, open the next image and paste it there.
+        Does nothing (returns False) if there is no bbox under cursor or this is the last image."""
+        if self.editing_blocked: return False
+        if self.item_id >= len(self.img_names) - 1: return False
+        if not hasattr(self.controller, "get_selected_figure_id_and_point_id"): return False
+
+        figure_id, _ = self.controller.get_selected_figure_id_and_point_id(self.controller.cursor_x, self.controller.cursor_y)
+        if figure_id is None: return False
+        figure = self.controller.figures[figure_id]
+        if figure.figure_type != FigureType.BBOX.name: return False
+
+        serialized = {"kwargs": figure.serialize(), "type": type(figure)}
+
+        self.forward()
+
+        self.controller.figures.append(serialized["type"](**serialized["kwargs"]))
+        self.controller.take_snapshot()
+        self.item_changed = True
+        return True
+
     def handle_key(self, key: str):
         if key.isdigit():
             self.change_label(key)

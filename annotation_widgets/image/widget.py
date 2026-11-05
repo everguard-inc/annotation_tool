@@ -330,6 +330,14 @@ class CanvasView(tk.Canvas):
             self.scale_event_wrapper(self.handle_mouse_hover)(event)
             self.update_frame = True
 
+        elif event.char.lower() == "b" and hasattr(self.logic, "carry_hovered_bbox_forward"):
+            if time.time() - self.last_key_press_time < self.min_time_between_frame_change:
+                return
+            if self.logic.carry_hovered_bbox_forward():
+                if self.fit_at_img_change:
+                    self.fit_image()
+                self.scale_event_wrapper(self.handle_mouse_hover)(event)
+
         elif event.char.lower() == "f":
             self.fit_image()
         else:
